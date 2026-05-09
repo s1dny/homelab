@@ -20,7 +20,7 @@ fi
 
 mkdir -p "${BACKUP_DIR}"
 
-tar -C "$(dirname "${SOURCE_DIR}")" -cf - "$(basename "${SOURCE_DIR}")" \
+tar --ignore-failed-read --warning=no-file-changed -C "$(dirname "${SOURCE_DIR}")" -cf - "$(basename "${SOURCE_DIR}")" \
   | zstd -T0 -19 -o "${TMP_PATH}"
 mv "${TMP_PATH}" "${FINAL_PATH}"
 
