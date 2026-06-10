@@ -75,7 +75,10 @@ in
     openFirewall = true;
   };
 
-  virtualisation.docker.enable = true;
+  virtualisation.docker = {
+    enable = true;
+    package = pkgs.docker_29;
+  };
 
   programs.fish.enable = true;
   programs.zoxide = {
@@ -97,7 +100,7 @@ in
     cargo
     cloudflared
     curl
-    docker
+    docker_29
     docker-compose
     dua
     eza
