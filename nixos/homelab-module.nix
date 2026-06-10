@@ -30,6 +30,7 @@ in
   networking.firewall = {
     enable = true;
     allowedTCPPorts = [ 22 6443 ];
+    trustedInterfaces = [ "cni0" "flannel.1" ];
   };
 
   services.journald.extraConfig = ''
