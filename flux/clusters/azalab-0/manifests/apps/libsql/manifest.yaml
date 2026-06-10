@@ -1,0 +1,79 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: libsql
+  namespace: libsql
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: libsql
+  template:
+    metadata:
+      labels:
+        app: libsql
+    spec:
+      containers:
+        - name: libsql
+          image: ghcr.io/tursodatabase/libsql-server:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: SQLD_NODE
+              value: primary
+            - name: SQLD_HTTP_LISTEN_ADDR
+              value: 0.0.0.0:8080
+            - name: SQLD_DB_PATH
+              value: /var/lib/sqld/iku.db
+            - name: SQLD_AUTH_JWT_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: libsql-auth
+                  key: SQLD_AUTH_JWT_KEY
+          ports:
+            - name: http
+              containerPort: 8080
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/sqld
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: libsql-data-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: libsql
+  namespace: libsql
+spec:
+  selector:
+    app: libsql
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: libsql
+  namespace: libsql
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: db.aza.network
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: libsql
+                port:
+                  number: 8080
