@@ -9,6 +9,10 @@ let
   homelabKopiaR2SecretsFile = "${homelabRuntimeSecretsDir}/kopia-r2.env";
   homelabHostSecretsSopsFile = "${homelabSrc}/nixos/secrets/host-secrets.sops.yaml";
   homelabSopsAgeKeyFile = "/var/lib/sops-nix/key.txt";
+  fluxInstallManifest = pkgs.fetchurl {
+    url = "https://github.com/fluxcd/flux2/releases/download/v2.6.4/install.yaml";
+    hash = "sha256-fNBDqCNmZye0ud5Ag0YUiyh0G0frCz5CN6tyWdStOrg=";
+  };
   defaultHostHostname = "azalab-0";
   defaultHostUsername = "aiden";
   defaultHostAuthorizedKeys = [
@@ -26,17 +30,6 @@ in
   networking.firewall = {
     enable = true;
     allowedTCPPorts = [ 22 6443 ];
-  };
-
-  virtualisation.docker = {
-    enable = true;
-    daemon.settings = {
-      log-driver = "json-file";
-      log-opts = {
-        max-size = "10m";
-        max-file = "5";
-      };
-    };
   };
 
   services.journald.extraConfig = ''
@@ -94,7 +87,6 @@ in
   };
 
   environment.etc."homelab/source".source = homelabSrc;
-  environment.etc."homelab/host-secrets/kopia-r2.env.example".source = "${homelabSrc}/nixos/secrets/kopia-r2.env.example";
 
   environment.systemPackages = with pkgs; [
     age
@@ -102,7 +94,6 @@ in
     cargo
     cloudflared
     curl
-    docker-buildx
     dua
     eza
     gcc
@@ -183,7 +174,6 @@ in
     group = "root";
     mode = "0400";
   };
-
   services.k3s = {
     enable = true;
     role = "server";
@@ -193,6 +183,7 @@ in
       "--write-kubeconfig-group=wheel"
     ];
   };
+  services.k3s.manifests.flux.source = fluxInstallManifest;
 
   systemd.services.cloudflared-dashboard-tunnel = {
     description = "Cloudflare Tunnel (dashboard-managed)";
@@ -224,10 +215,8 @@ in
     '';
   };
 
-  # Keep packages like cloudflared current by advancing only the nixpkgs input
-  # of the host bootstrap flake; homelab config changes still stay manual.
   systemd.services.homelab-auto-upgrade = {
-    description = "Update nixpkgs input and rebuild the host";
+    description = "Update flake inputs and rebuild the host";
     after = [ "network-online.target" ];
     wants = [ "network-online.target" ];
     path = [ pkgs.nix pkgs.bash ];
@@ -239,13 +228,13 @@ in
     script = ''
       set -euo pipefail
 
-      nix flake update nixpkgs --flake ${homelabBootstrapFlakePath}
+      nix flake update --flake ${homelabBootstrapFlakePath}
       exec /run/current-system/sw/bin/nixos-rebuild switch --flake ${homelabBootstrapFlakePath}#${config.networking.hostName}
     '';
   };
 
   systemd.timers.homelab-auto-upgrade = {
-    description = "Run automatic nixpkgs upgrades for the host";
+    description = "Run automatic upgrades for the host";
     wantedBy = [ "timers.target" ];
     timerConfig = {
       OnCalendar = "*-*-* 00:00:00";
@@ -254,7 +243,7 @@ in
   };
 
   systemd.services.homelab-ensure-flux-sops-age = {
-    description = "Ensure flux-system/sops-age secret exists";
+    description = "Ensure Flux sync and sops-age secret exist";
     after = [ "k3s.service" "network-online.target" ];
     wants = [ "k3s.service" "network-online.target" ];
     path = [ pkgs.kubectl pkgs.bash pkgs.coreutils ];
@@ -281,10 +270,19 @@ in
         exit 0
       fi
 
+      if ! kubectl --request-timeout=5s get crd \
+        gitrepositories.source.toolkit.fluxcd.io \
+        kustomizations.kustomize.toolkit.fluxcd.io >/dev/null 2>&1; then
+        echo "homelab-ensure-flux-sops-age: Flux CRDs are not present yet"
+        exit 0
+      fi
+
       kubectl -n flux-system create secret generic sops-age \
         --from-file=age.agekey="${homelabSopsAgeKeyFile}" \
         --dry-run=client -o yaml \
         | kubectl apply -f -
+
+      kubectl apply -f "${homelabSourcePath}/flux/clusters/${config.networking.hostName}/flux-system-sync.yaml"
     '';
   };
 
@@ -322,32 +320,10 @@ in
     "f /srv/immich/library/encoded-video/.immich 0664 ${defaultHostUsername} users -"
     "d /srv/immich/postgres 0700 999 999 -"
     "d /srv/immich/redis 0750 999 root -"
-    "d /srv/libsql/backups 0750 root root -"
-    "d /srv/libsql/data 0750 root root -"
     "d /srv/kopia/repository 0750 root root -"
-    "d /srv/vaultwarden/data 0750 root root -"
     "d /srv/tuwunel/data 0750 root root -"
     "d /var/lib/kopia 0700 root root -"
   ];
-
-  systemd.services.libsql-backup = {
-    description = "Backup libsql database with zstd compression";
-    path = [ pkgs.gnutar pkgs.zstd pkgs.coreutils pkgs.findutils ];
-    serviceConfig = {
-      Type = "oneshot";
-      User = "root";
-      ExecStart = "${pkgs.bash}/bin/bash ${homelabSourcePath}/scripts/libsql-backup.sh";
-    };
-  };
-
-  systemd.timers.libsql-backup = {
-    description = "Run libsql backup daily at midnight";
-    wantedBy = [ "timers.target" ];
-    timerConfig = {
-      OnCalendar = "*-*-* 00:00:00";
-      Persistent = true;
-    };
-  };
 
   systemd.services.kopia-host-backup = {
     description = "Kopia host snapshots to local repository";
@@ -397,7 +373,7 @@ in
 
   users.users.${defaultHostUsername} = {
     isNormalUser = true;
-    extraGroups = [ "wheel" "networkmanager" "docker" ];
+    extraGroups = [ "wheel" "networkmanager" ];
     shell = pkgs.fish;
     openssh.authorizedKeys.keys = defaultHostAuthorizedKeys;
   };

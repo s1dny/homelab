@@ -12,13 +12,13 @@ if ! kopia repository status >/dev/null 2>&1; then
 fi
 
 kopia policy set --global \
-  --keep-latest 30 \
-  --keep-daily 30 \
-  --keep-weekly 12 \
-  --keep-monthly 12
+  --keep-latest 10 \
+  --keep-daily 10 \
+  --keep-weekly 10 \
+  --keep-monthly 10
 
 # Backup full service directories (excluding /srv/kopia to avoid backing up the backup repository itself).
-SOURCES=(/etc/nixos /srv/libsql /srv/immich /srv/vaultwarden /srv/tuwunel)
+SOURCES=(/etc/nixos /srv/immich /srv/tuwunel)
 if [[ -n "${KOPIA_HOST_SOURCES:-}" ]]; then
   # shellcheck disable=SC2206
   SOURCES=(${KOPIA_HOST_SOURCES})

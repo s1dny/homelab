@@ -3,7 +3,7 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
-    homelab.url = "github:s1dny/node";
+    homelab.url = "github:s1dny/homelab";
   };
 
   outputs = { nixpkgs, homelab, ... }:
@@ -12,7 +12,6 @@
     in {
       nixosConfigurations.azalab-0 = nixpkgs.lib.nixosSystem {
         inherit system;
-        specialArgs = { homelabSrc = homelab; };
         modules = [
           ./hardware-configuration.nix
           homelab.nixosModules.default
