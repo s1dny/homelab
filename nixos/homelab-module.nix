@@ -74,6 +74,8 @@ in
     openFirewall = true;
   };
 
+  virtualisation.docker.enable = true;
+
   programs.fish.enable = true;
   programs.zoxide = {
     enable = true;
@@ -94,6 +96,8 @@ in
     cargo
     cloudflared
     curl
+    docker
+    docker-compose
     dua
     eza
     gcc
@@ -376,7 +380,7 @@ in
 
   users.users.${defaultHostUsername} = {
     isNormalUser = true;
-    extraGroups = [ "wheel" "networkmanager" ];
+    extraGroups = [ "wheel" "networkmanager" "docker" ];
     shell = pkgs.fish;
     openssh.authorizedKeys.keys = defaultHostAuthorizedKeys;
   };
