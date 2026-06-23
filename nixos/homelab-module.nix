@@ -119,7 +119,9 @@ in
     python3
     rustc
     sops
+    sqld
     sqlite
+    turso-cli
     yq-go
     zstd
 
