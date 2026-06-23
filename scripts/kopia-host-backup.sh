@@ -18,7 +18,7 @@ kopia policy set --global \
   --keep-monthly 10
 
 # Backup full service directories (excluding /srv/kopia to avoid backing up the backup repository itself).
-SOURCES=(/etc/nixos /srv/immich /srv/tuwunel)
+SOURCES=(/etc/nixos /srv/immich /srv/libsql /srv/tuwunel)
 if [[ -n "${KOPIA_HOST_SOURCES:-}" ]]; then
   # shellcheck disable=SC2206
   SOURCES=(${KOPIA_HOST_SOURCES})

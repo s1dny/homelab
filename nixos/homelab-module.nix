@@ -331,6 +331,7 @@ in
     "d /srv/libsql 0755 root root -"
     "d /srv/libsql/backups 0750 root root -"
     "d /srv/libsql/data 0750 root root -"
+    "d /srv/libsql/spinyourlife 0750 666 666 -"
     "d /srv/kopia/repository 0750 root root -"
     "d /srv/tuwunel/data 0750 root root -"
     "d /var/lib/kopia 0700 root root -"
