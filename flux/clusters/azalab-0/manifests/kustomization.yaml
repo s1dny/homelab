@@ -4,6 +4,7 @@ kind: Kustomization
 resources:
   - apps/secrets.sops.yaml
   - apps/libsql/manifest.yaml
+  - apps/libsql/spinyourlife.yaml
   - apps/kopia/manifest.yaml
   - apps/immich/postgres.yaml
   - apps/immich/repository.yaml

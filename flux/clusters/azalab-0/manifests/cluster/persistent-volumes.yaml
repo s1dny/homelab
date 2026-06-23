@@ -30,6 +30,35 @@ spec:
 apiVersion: v1
 kind: PersistentVolume
 metadata:
+  name: spinyourlife-libsql-data-pv
+spec:
+  capacity:
+    storage: 100Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  hostPath:
+    path: /srv/libsql/spinyourlife
+    type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: spinyourlife-libsql-data-pvc
+  namespace: libsql
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: ""
+  resources:
+    requests:
+      storage: 100Gi
+  volumeName: spinyourlife-libsql-data-pv
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
   name: immich-library-pv
 spec:
   capacity:
