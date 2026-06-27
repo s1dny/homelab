@@ -24,11 +24,6 @@ spec:
               value: 0.0.0.0:8080
             - name: SQLD_DB_PATH
               value: /var/lib/sqld/spinyourlife.db
-            - name: SQLD_AUTH_JWT_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: libsql-auth
-                  key: SQLD_AUTH_JWT_KEY
           ports:
             - name: http
               containerPort: 8080
@@ -56,24 +51,3 @@ spec:
     - name: http
       port: 8080
       targetPort: 8080
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: spinyourlife-libsql
-  namespace: libsql
-  annotations:
-    traefik.ingress.kubernetes.io/router.entrypoints: web
-spec:
-  ingressClassName: traefik
-  rules:
-    - host: db.spinyour.life
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: spinyourlife-libsql
-                port:
-                  number: 8080

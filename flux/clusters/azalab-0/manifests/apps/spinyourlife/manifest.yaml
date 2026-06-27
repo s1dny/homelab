@@ -20,11 +20,6 @@ spec:
           env:
             - name: LIBSQL_URL
               value: http://spinyourlife-libsql.libsql.svc.cluster.local:8080
-            - name: LIBSQL_AUTH_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: libsql-auth
-                  key: SQLD_AUTH_JWT_KEY
             - name: PORT
               value: "3000"
           ports:
