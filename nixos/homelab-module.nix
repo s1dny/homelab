@@ -336,6 +336,7 @@ in
     "d /srv/libsql/spinyourlife 0750 666 666 -"
     "d /srv/kopia/repository 0750 root root -"
     "d /srv/registry 0755 root root -"
+    "d /srv/spinyourlife-deploy 0750 ${defaultHostUsername} users -"
     "d /srv/tuwunel/data 0750 root root -"
     "d /var/lib/kopia 0700 root root -"
   ];
@@ -361,6 +362,98 @@ in
         -v /srv/registry:/var/lib/registry \
         registry:2
     '';
+  };
+
+  systemd.services.spinyourlife-auto-deploy = {
+    description = "Build and deploy spinyourlife from GitHub";
+    after = [
+      "docker.service"
+      "homelab-local-registry.service"
+      "k3s.service"
+      "network-online.target"
+    ];
+    wants = [
+      "docker.service"
+      "homelab-local-registry.service"
+      "k3s.service"
+      "network-online.target"
+    ];
+    path = [
+      pkgs.bash
+      pkgs.coreutils
+      pkgs.docker_29
+      pkgs.git
+      pkgs.kubectl
+      pkgs.openssh
+      pkgs.util-linux
+    ];
+    serviceConfig = {
+      Type = "oneshot";
+      User = defaultHostUsername;
+      Group = "users";
+      SupplementaryGroups = [ "docker" "wheel" ];
+      WorkingDirectory = "/srv/spinyourlife-deploy";
+      TimeoutStartSec = "15m";
+    };
+    script = ''
+      set -euo pipefail
+
+      export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+
+      repo_url="git@github.com:s1dny/spinyourlife.git"
+      branch="main"
+      app_dir="/srv/spinyourlife-deploy/repo"
+      state_file="/srv/spinyourlife-deploy/deployed-rev"
+      lock_file="/srv/spinyourlife-deploy/deploy.lock"
+      image="localhost:5000/spinyourlife:latest"
+
+      exec 9>"$lock_file"
+      if ! flock -n 9; then
+        echo "spinyourlife-auto-deploy: another deploy is already running"
+        exit 0
+      fi
+
+      if [[ ! -r "$KUBECONFIG" ]]; then
+        echo "spinyourlife-auto-deploy: kubeconfig is not readable yet"
+        exit 0
+      fi
+
+      if [[ ! -d "$app_dir/.git" ]]; then
+        rm -rf "$app_dir"
+        git clone --branch "$branch" "$repo_url" "$app_dir"
+      fi
+
+      cd "$app_dir"
+      git fetch --prune origin "$branch"
+      target_rev="$(git rev-parse "origin/$branch")"
+      deployed_rev="$(cat "$state_file" 2>/dev/null || true)"
+
+      if [[ "$target_rev" == "$deployed_rev" ]]; then
+        echo "spinyourlife-auto-deploy: already deployed $target_rev"
+        exit 0
+      fi
+
+      git checkout -B "$branch" "$target_rev"
+      docker build -t "$image" .
+      docker push "$image"
+
+      kubectl -n libsql rollout restart deployment/spinyourlife
+      kubectl -n libsql rollout status deployment/spinyourlife --timeout=3m
+
+      printf '%s\n' "$target_rev" > "$state_file"
+      echo "spinyourlife-auto-deploy: deployed $target_rev"
+    '';
+  };
+
+  systemd.timers.spinyourlife-auto-deploy = {
+    description = "Poll GitHub and deploy spinyourlife changes";
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnBootSec = "45s";
+      OnUnitActiveSec = "1m";
+      AccuracySec = "10s";
+      Persistent = false;
+    };
   };
 
   systemd.services.kopia-host-backup = {
