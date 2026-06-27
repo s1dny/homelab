@@ -98,6 +98,7 @@ In Cloudflare Zero Trust dashboard, create a tunnel named the same as your clust
 - `photos.aza.network` -> `http://localhost:80`
 - `kopia.aza.network` -> `http://localhost:80`
 - `matrix.aza.network` -> `http://localhost:80`
+- `spinyour.life` -> `http://localhost:80`
 
 Set `CLOUDFLARE_TUNNEL_TOKEN` in `nixos/secrets/host-secrets.sops.yaml` (`cloudflare_tunnel_token_env`) and rebuild. `cloudflared` itself is supplied by `pkgs.cloudflared`, so newer packaged releases are picked up automatically by the host upgrade timer.
 
@@ -114,6 +115,11 @@ homelab-check-k8s-health
 
 ## Cloudflare Access
 Put `photos.aza.network` and `kopia.aza.network` behind Cloudflare Access.
+
+For `spinyour.life`, remove the Cloudflare Worker route/custom domain and point
+the hostname at the `azalab-0` tunnel public hostname above. Keep
+`db.spinyour.life` routed to `http://localhost:80` if the app should continue
+using the public libSQL endpoint outside the cluster.
 
 ## Kopia Backups
 `flux/clusters/<cluster>/manifests/apps/kopia/manifest.yaml` uses `--insecure` and `--disable-csrf-token-checks`. Keep `kopia.aza.network` behind Cloudflare Access.

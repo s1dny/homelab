@@ -1,0 +1,85 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spinyourlife
+  namespace: libsql
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: spinyourlife
+  template:
+    metadata:
+      labels:
+        app: spinyourlife
+    spec:
+      containers:
+        - name: spinyourlife
+          image: ghcr.io/s1dny/spinyourlife:latest
+          imagePullPolicy: Always
+          env:
+            - name: LIBSQL_URL
+              value: http://spinyourlife-libsql.libsql.svc.cluster.local:8080
+            - name: LIBSQL_AUTH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: libsql-auth
+                  key: SQLD_AUTH_JWT_KEY
+            - name: PORT
+              value: "3000"
+          ports:
+            - name: http
+              containerPort: 3000
+          livenessProbe:
+            httpGet:
+              path: /api/billing/products
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /api/billing/products
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: spinyourlife
+  namespace: libsql
+spec:
+  selector:
+    app: spinyourlife
+  ports:
+    - name: http
+      port: 3000
+      targetPort: 3000
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: spinyourlife
+  namespace: libsql
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: spinyour.life
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: spinyourlife
+                port:
+                  number: 3000
