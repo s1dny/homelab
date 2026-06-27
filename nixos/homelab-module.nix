@@ -335,9 +335,33 @@ in
     "d /srv/libsql/data 0750 root root -"
     "d /srv/libsql/spinyourlife 0750 666 666 -"
     "d /srv/kopia/repository 0750 root root -"
+    "d /srv/registry 0755 root root -"
     "d /srv/tuwunel/data 0750 root root -"
     "d /var/lib/kopia 0700 root root -"
   ];
+
+  systemd.services.homelab-local-registry = {
+    description = "Local Docker registry for k3s workloads";
+    after = [ "docker.service" "network-online.target" ];
+    wants = [ "docker.service" "network-online.target" ];
+    wantedBy = [ "multi-user.target" ];
+    path = [ pkgs.docker_29 pkgs.bash ];
+    serviceConfig = {
+      Type = "simple";
+      Restart = "always";
+      RestartSec = "5s";
+      ExecStop = "-${pkgs.docker_29}/bin/docker stop homelab-registry";
+    };
+    preStart = ''
+      ${pkgs.docker_29}/bin/docker rm -f homelab-registry registry >/dev/null 2>&1 || true
+    '';
+    script = ''
+      exec ${pkgs.docker_29}/bin/docker run --rm --name homelab-registry \
+        -p 127.0.0.1:5000:5000 \
+        -v /srv/registry:/var/lib/registry \
+        registry:2
+    '';
+  };
 
   systemd.services.kopia-host-backup = {
     description = "Kopia host snapshots to local repository";
