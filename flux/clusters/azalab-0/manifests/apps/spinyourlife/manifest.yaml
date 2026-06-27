@@ -13,6 +13,8 @@ spec:
       labels:
         app: spinyourlife
     spec:
+      imagePullSecrets:
+        - name: ghcr-s1dny
       containers:
         - name: spinyourlife
           image: ghcr.io/s1dny/spinyourlife:latest
