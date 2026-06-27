@@ -434,7 +434,7 @@ in
       fi
 
       git checkout -B "$branch" "$target_rev"
-      docker build -t "$image" .
+      docker build --build-arg SOURCE_REV="$target_rev" -t "$image" .
       docker push "$image"
 
       kubectl -n libsql rollout restart deployment/spinyourlife
