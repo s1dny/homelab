@@ -16,7 +16,7 @@ spec:
       containers:
         - name: spinyourlife
           image: localhost:5000/spinyourlife:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           env:
             - name: LIBSQL_URL
               value: http://spinyourlife-libsql.libsql.svc.cluster.local:8080
