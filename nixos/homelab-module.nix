@@ -434,11 +434,17 @@ in
       fi
 
       git checkout -B "$branch" "$target_rev"
-      docker build --build-arg SOURCE_REV="$target_rev" -t "$image" .
+      docker build --no-cache --build-arg SOURCE_REV="$target_rev" -t "$image" .
       docker push "$image"
 
       kubectl -n libsql rollout restart deployment/spinyourlife
       kubectl -n libsql rollout status deployment/spinyourlife --timeout=3m
+
+      running_rev="$(kubectl -n libsql exec deployment/spinyourlife -- cat /app/.source-rev)"
+      if [[ "$running_rev" != "$target_rev" ]]; then
+        echo "spinyourlife-auto-deploy: running revision $running_rev does not match target $target_rev"
+        exit 1
+      fi
 
       printf '%s\n' "$target_rev" > "$state_file"
       echo "spinyourlife-auto-deploy: deployed $target_rev"
