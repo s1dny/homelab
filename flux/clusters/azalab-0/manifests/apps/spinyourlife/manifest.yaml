@@ -22,6 +22,17 @@ spec:
               value: http://spinyourlife-libsql.libsql.svc.cluster.local:8080
             - name: PORT
               value: "3000"
+            - name: APPLE_IAP_KEY_ID
+              value: "S3RPF32X4Q"
+            - name: APPLE_IAP_ISSUER_ID
+              value: "570b1823-77bf-407c-b0a6-8b4c726f5741"
+            - name: APPLE_IAP_BUNDLE_ID
+              value: "life.spinyour"
+            - name: APPLE_IAP_PRIVATE_KEY_B64
+              valueFrom:
+                secretKeyRef:
+                  name: spinyourlife-iap
+                  key: APPLE_IAP_PRIVATE_KEY_B64
           ports:
             - name: http
               containerPort: 3000
