@@ -7,6 +7,8 @@ spec:
   interval: 1m0s
   ref:
     branch: main
+  secretRef:
+    name: flux-system-write
   url: https://github.com/s1dny/homelab.git
 ---
 apiVersion: kustomize.toolkit.fluxcd.io/v1

@@ -1,0 +1,56 @@
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImageRepository
+metadata:
+  name: immich
+  namespace: flux-system
+spec:
+  image: ghcr.io/immich-app/immich-server
+  interval: 1h0m0s
+  provider: generic
+  exclusionList:
+    - ^.*\.sig$
+---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImagePolicy
+metadata:
+  name: immich
+  namespace: flux-system
+  labels:
+    app.kubernetes.io/name: immich
+spec:
+  imageRepositoryRef:
+    name: immich
+  filterTags:
+    pattern: ^v(?P<version>.*)$
+    extract: $version
+  policy:
+    semver:
+      range: ">=0.0.0"
+---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImageUpdateAutomation
+metadata:
+  name: immich
+  namespace: flux-system
+spec:
+  interval: 30m0s
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  policySelector:
+    matchLabels:
+      app.kubernetes.io/name: immich
+  git:
+    checkout:
+      ref:
+        branch: main
+    commit:
+      author:
+        name: flux
+        email: flux@aza.network
+      messageTemplate: "Update Immich image"
+    push:
+      branch: main
+  update:
+    strategy: Setters
+    path: ./flux/clusters/azalab-0/manifests/apps/immich

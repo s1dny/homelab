@@ -9,6 +9,7 @@ resources:
   - apps/kopia/manifest.yaml
   - apps/immich/postgres.yaml
   - apps/immich/repository.yaml
+  - apps/immich/image-automation.yaml
   - apps/immich/release.yaml
   - apps/tuwunel/manifest.yaml
   - apps/paste/manifest.yaml
