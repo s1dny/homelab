@@ -51,3 +51,25 @@ spec:
     - name: http
       port: 8080
       targetPort: 8080
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: spinyourlife-libsql
+  namespace: libsql
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: db.spinyour.life
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: spinyourlife-libsql
+                port:
+                  number: 8080
