@@ -520,7 +520,7 @@ in
       users = [ defaultHostUsername ];
       commands = [
         {
-          command = "${pkgs.nix}/bin/nix";
+          command = "/run/current-system/sw/bin/nix";
           options = [ "NOPASSWD" ];
         }
         {
