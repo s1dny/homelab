@@ -1,0 +1,35 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: spinyourlife-db-maint
+  namespace: libsql
+spec:
+  restartPolicy: Never
+  containers:
+    - name: maint
+      image: ghcr.io/tursodatabase/libsql-server:latest
+      command: ["sh", "-lc", "sleep 3600"]
+      securityContext:
+        runAsUser: 0
+        runAsGroup: 0
+      volumeMounts:
+        - name: data
+          mountPath: /var/lib/sqld
+        - name: nix-store
+          mountPath: /nix/store
+          readOnly: true
+        - name: current-system
+          mountPath: /run/current-system
+          readOnly: true
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: spinyourlife-libsql-data-pvc
+    - name: nix-store
+      hostPath:
+        path: /nix/store
+        type: Directory
+    - name: current-system
+      hostPath:
+        path: /run/current-system
+        type: Directory

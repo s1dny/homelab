@@ -2,5 +2,5 @@
 set -euo pipefail
 
 cd /etc/nixos
-sudo nix flake update homelab
-sudo nixos-rebuild switch --flake "/etc/nixos#$(hostname -s)"
+sudo -n nix flake update homelab
+sudo -n nixos-rebuild switch --flake "/etc/nixos#$(hostname -s)"

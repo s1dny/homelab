@@ -16,6 +16,8 @@ or
 sync.sh
 ```
 
+`sync.sh` uses passwordless sudo for the exact `nix` and `nixos-rebuild` commands it runs. After changing that sudoers rule, run the rebuild once with normal sudo; subsequent `sync.sh` runs should not prompt.
+
 ## Prerequisites
 - Domain in Cloudflare: `aza.network`
 - Cloudflare Zero Trust account

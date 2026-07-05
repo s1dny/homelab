@@ -515,6 +515,22 @@ in
     openssh.authorizedKeys.keys = defaultHostAuthorizedKeys;
   };
 
+  security.sudo.extraRules = [
+    {
+      users = [ defaultHostUsername ];
+      commands = [
+        {
+          command = "${pkgs.nix}/bin/nix";
+          options = [ "NOPASSWD" ];
+        }
+        {
+          command = "/run/current-system/sw/bin/nixos-rebuild";
+          options = [ "NOPASSWD" ];
+        }
+      ];
+    }
+  ];
+
   nixpkgs.config.allowUnfree = true;
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
 
