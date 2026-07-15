@@ -4,7 +4,7 @@ metadata:
   name: libsql
   namespace: libsql
 spec:
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app: libsql
@@ -50,7 +50,6 @@ metadata:
   name: libsql
   namespace: libsql
 spec:
-  replicas: 0
   selector:
     app: libsql
   ports:
