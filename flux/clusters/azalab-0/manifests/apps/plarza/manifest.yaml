@@ -92,7 +92,7 @@ metadata:
   name: plarza
   namespace: plarza
 spec:
-  replicas: 0
+  replicas: 1
   selector:
     matchLabels:
       app: plarza
