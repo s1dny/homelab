@@ -210,6 +210,7 @@ metadata:
   namespace: plarza
   annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: web
+    traefik.ingress.kubernetes.io/router.priority: "100"
 spec:
   ingressClassName: traefik
   rules:
