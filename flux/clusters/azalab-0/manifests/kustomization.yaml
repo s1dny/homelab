@@ -5,7 +5,6 @@ resources:
   - apps/secrets.sops.yaml
   - apps/plarza/secrets.sops.yaml
   - apps/plarza/manifest.yaml
-  - apps/libsql/manifest.yaml
   - apps/libsql/spinyourlife.yaml
   - apps/spinyourlife/manifest.yaml
   - apps/kopia/manifest.yaml
