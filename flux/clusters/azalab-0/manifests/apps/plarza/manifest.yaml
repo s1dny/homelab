@@ -114,11 +114,11 @@ spec:
           type: RuntimeDefault
       initContainers:
         - name: migrate
-          image: localhost:5000/plarza:5a5652d6f61a
+          image: localhost:5000/plarza:latest
           imagePullPolicy: Always
           command:
             - bun
-            - scripts/migrate.ts
+            - database/scripts/migrate.ts
           envFrom:
             - secretRef:
                 name: plarza-app
@@ -130,7 +130,7 @@ spec:
             runAsNonRoot: true
       containers:
         - name: app
-          image: localhost:5000/plarza:5a5652d6f61a
+          image: localhost:5000/plarza:latest
           imagePullPolicy: Always
           env:
             - name: NODE_ENV
