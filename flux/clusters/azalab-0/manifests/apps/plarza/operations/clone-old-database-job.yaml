@@ -31,7 +31,7 @@ spec:
               test ! -e /target/plarza.db.copying
               mkdir /target/plarza.db.copying
               tar -C /old --exclude='./dbs/default/data' -cpf - . | tar -C /target/plarza.db.copying -xpf -
-              dd if=/old/dbs/default/data of=/target/plarza.db.copying/dbs/default/data bs=8M iflag=fullblock conv=fsync status=progress
+              dd if=/old/dbs/default/data of=/target/plarza.db.copying/dbs/default/data bs=8M iflag=fullblock,direct oflag=direct conv=fsync status=progress
               chown --reference=/old/dbs/default/data /target/plarza.db.copying/dbs/default/data
               chmod --reference=/old/dbs/default/data /target/plarza.db.copying/dbs/default/data
               sync
