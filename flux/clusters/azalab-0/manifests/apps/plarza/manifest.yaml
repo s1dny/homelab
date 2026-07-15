@@ -114,7 +114,7 @@ spec:
           type: RuntimeDefault
       initContainers:
         - name: migrate
-          image: localhost:5000/plarza:937c26f695ee
+          image: localhost:5000/plarza:1398fb321674
           imagePullPolicy: Always
           command:
             - bun
@@ -130,7 +130,7 @@ spec:
             runAsNonRoot: true
       containers:
         - name: app
-          image: localhost:5000/plarza:937c26f695ee
+          image: localhost:5000/plarza:1398fb321674
           imagePullPolicy: Always
           env:
             - name: NODE_ENV
