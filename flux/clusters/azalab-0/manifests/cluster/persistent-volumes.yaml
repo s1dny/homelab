@@ -200,3 +200,32 @@ spec:
     requests:
       storage: 100Gi
   volumeName: tuwunel-data-pv
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: plarza-libsql-data-pv
+spec:
+  capacity:
+    storage: 20Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  hostPath:
+    path: /srv/libsql/plarza
+    type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: plarza-libsql-data-pvc
+  namespace: plarza
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: ""
+  resources:
+    requests:
+      storage: 20Gi
+  volumeName: plarza-libsql-data-pv

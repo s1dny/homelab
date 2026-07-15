@@ -333,6 +333,7 @@ in
     "d /srv/libsql 0755 root root -"
     "d /srv/libsql/backups 0750 root root -"
     "d /srv/libsql/data 0750 root root -"
+    "d /srv/libsql/plarza 0750 666 666 -"
     "d /srv/libsql/spinyourlife 0750 666 666 -"
     "d /srv/kopia/repository 0750 root root -"
     "d /srv/registry 0755 root root -"
