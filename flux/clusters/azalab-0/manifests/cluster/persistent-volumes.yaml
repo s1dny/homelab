@@ -207,7 +207,7 @@ metadata:
   name: plarza-libsql-data-pv
 spec:
   capacity:
-    storage: 20Gi
+    storage: 100Gi
   accessModes:
     - ReadWriteOnce
   persistentVolumeReclaimPolicy: Retain
@@ -227,5 +227,5 @@ spec:
   storageClassName: ""
   resources:
     requests:
-      storage: 20Gi
+      storage: 100Gi
   volumeName: plarza-libsql-data-pv

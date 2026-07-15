@@ -313,7 +313,7 @@ in
     "d /var/lib/homelab 0755 root root -"
     "d /var/lib/homelab/generated 0750 root wheel -"
     "d /var/lib/homelab/generated/k8s 0750 root wheel -"
-    "d /srv 0775 ${defaultHostUsername} users -"
+    "d /srv 0775 root users -"
     "d /srv/immich 0775 ${defaultHostUsername} users -"
     "d /srv/immich/library 2775 ${defaultHostUsername} users -"
     "d /srv/immich/library/library 2775 ${defaultHostUsername} users -"

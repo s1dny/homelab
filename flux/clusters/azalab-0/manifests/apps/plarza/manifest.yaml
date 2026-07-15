@@ -4,7 +4,7 @@ metadata:
   name: plarza-libsql
   namespace: plarza
 spec:
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app: plarza-libsql
@@ -59,6 +59,10 @@ spec:
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
+              add:
+                - CHOWN
+                - SETGID
+                - SETUID
               drop:
                 - ALL
           volumeMounts:
@@ -88,7 +92,7 @@ metadata:
   name: plarza
   namespace: plarza
 spec:
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app: plarza
@@ -104,6 +108,8 @@ spec:
     spec:
       terminationGracePeriodSeconds: 40
       securityContext:
+        runAsGroup: 1000
+        runAsUser: 1000
         seccompProfile:
           type: RuntimeDefault
       initContainers:
