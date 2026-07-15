@@ -19,7 +19,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: merge
-          image: localhost:5000/plarza:1398fb321674
+          image: localhost:5000/plarza:c6dd094829c4
           imagePullPolicy: Always
           command:
             - /bin/sh
