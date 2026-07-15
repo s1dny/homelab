@@ -50,6 +50,7 @@ metadata:
   name: libsql
   namespace: libsql
 spec:
+  replicas: 0
   selector:
     app: libsql
   ports:
