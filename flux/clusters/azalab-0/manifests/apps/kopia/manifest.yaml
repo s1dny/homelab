@@ -16,7 +16,7 @@ spec:
       containers:
         - name: kopia
           image: kopia/kopia:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           command:
             - /bin/sh
             - -ec
@@ -48,11 +48,6 @@ spec:
                 secretKeyRef:
                   name: kopia-auth
                   key: KOPIA_SERVER_USERNAME
-            - name: KOPIA_SERVER_HOSTNAME
-              valueFrom:
-                secretKeyRef:
-                  name: kopia-auth
-                  key: KOPIA_SERVER_HOSTNAME
             - name: KOPIA_SERVER_PASSWORD
               valueFrom:
                 secretKeyRef:

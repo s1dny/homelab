@@ -9,9 +9,13 @@ let
   homelabKopiaR2SecretsFile = "${homelabRuntimeSecretsDir}/kopia-r2.env";
   homelabHostSecretsSopsFile = "${homelabSrc}/nixos/secrets/host-secrets.sops.yaml";
   homelabSopsAgeKeyFile = "/var/lib/sops-nix/key.txt";
+  fluxTransitionManifest = pkgs.fetchurl {
+    url = "https://github.com/fluxcd/flux2/releases/download/v2.8.8/install.yaml";
+    hash = "sha256-zCOEbchr7DfAYNhgwRiER+iWqT+h2eHjrKTiVybBrmE=";
+  };
   fluxInstallManifest = pkgs.fetchurl {
-    url = "https://github.com/fluxcd/flux2/releases/download/v2.6.4/install.yaml";
-    hash = "sha256-fNBDqCNmZye0ud5Ag0YUiyh0G0frCz5CN6tyWdStOrg=";
+    url = "https://github.com/fluxcd/flux2/releases/download/v2.9.2/install.yaml";
+    hash = "sha256-Sl87fH08AlzmMFwvqD46OQacfaq8QEqw5nKW+hcwWxg=";
   };
   defaultHostHostname = "azalab-0";
   defaultHostUsername = "aiden";
@@ -77,7 +81,7 @@ in
 
   virtualisation.docker = {
     enable = true;
-    package = pkgs.docker_29;
+    package = pkgs.docker;
   };
 
   programs.fish.enable = true;
@@ -100,7 +104,6 @@ in
     cargo
     cloudflared
     curl
-    docker_29
     docker-compose
     dua
     eza
@@ -146,6 +149,13 @@ in
 
     (writeShellScriptBin "sync.sh" ''
       exec ${pkgs.bash}/bin/bash ${homelabSourcePath}/sync.sh "$@"
+    '')
+
+    (writeShellScriptBin "homelab-sync-bootstrap" ''
+      set -euo pipefail
+      ${pkgs.coreutils}/bin/install -m 0644 \
+        ${homelabSourcePath}/nixos/flake.nix \
+        ${homelabBootstrapFlakePath}/flake.nix
     '')
   ];
 
@@ -193,7 +203,55 @@ in
       "--write-kubeconfig-group=wheel"
     ];
   };
-  services.k3s.manifests.flux.source = fluxInstallManifest;
+
+  systemd.services.homelab-reconcile-flux = {
+    description = "Install and reconcile Flux";
+    after = [ "docker.service" "k3s.service" "network-online.target" ];
+    wants = [ "docker.service" "k3s.service" "network-online.target" ];
+    path = [ pkgs.docker pkgs.kubectl pkgs.gnugrep pkgs.bash pkgs.coreutils ];
+    serviceConfig = {
+      Type = "oneshot";
+      User = "root";
+      TimeoutStartSec = "30m";
+    };
+    script = ''
+      set -euo pipefail
+      export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+
+      until kubectl --request-timeout=5s get nodes >/dev/null 2>&1; do
+        sleep 5
+      done
+
+      if kubectl get crd imagepolicies.image.toolkit.fluxcd.io >/dev/null 2>&1 \
+        && kubectl get crd imagepolicies.image.toolkit.fluxcd.io \
+          -o jsonpath='{.status.storedVersions}' | grep -qw v1beta2; then
+        echo "homelab-reconcile-flux: migrating Flux image APIs through v2.8.8"
+        kubectl apply --server-side --force-conflicts -f ${fluxTransitionManifest}
+        kubectl -n flux-system wait --for=condition=Available deployment \
+          -l app.kubernetes.io/part-of=flux --timeout=10m
+
+        ${pkgs.docker}/bin/docker run --rm --pull=always --network=host \
+          -v /etc/rancher/k3s/k3s.yaml:/kubeconfig:ro \
+          ghcr.io/fluxcd/flux-cli:v2.9.2 \
+          --kubeconfig=/kubeconfig migrate
+      fi
+
+      kubectl apply --server-side --force-conflicts -f ${fluxInstallManifest}
+      kubectl -n flux-system wait --for=condition=Available deployment \
+        -l app.kubernetes.io/part-of=flux --timeout=10m
+    '';
+  };
+
+  systemd.timers.homelab-reconcile-flux = {
+    description = "Periodically reconcile the Flux installation";
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnBootSec = "1m";
+      OnUnitActiveSec = "1h";
+      RandomizedDelaySec = "5m";
+      Persistent = true;
+    };
+  };
 
   systemd.services.cloudflared-dashboard-tunnel = {
     description = "Cloudflare Tunnel (dashboard-managed)";
@@ -229,7 +287,7 @@ in
     description = "Update flake inputs and rebuild the host";
     after = [ "network-online.target" ];
     wants = [ "network-online.target" ];
-    path = [ pkgs.nix pkgs.bash ];
+    path = [ pkgs.nix pkgs.bash pkgs.coreutils ];
     serviceConfig = {
       Type = "oneshot";
       User = "root";
@@ -237,6 +295,14 @@ in
     };
     script = ''
       set -euo pipefail
+
+      if ! cmp -s \
+        ${homelabSourcePath}/nixos/flake.nix \
+        ${homelabBootstrapFlakePath}/flake.nix; then
+        install -m 0644 \
+          ${homelabSourcePath}/nixos/flake.nix \
+          ${homelabBootstrapFlakePath}/flake.nix
+      fi
 
       nix flake update --flake ${homelabBootstrapFlakePath}
       exec /run/current-system/sw/bin/nixos-rebuild switch --flake ${homelabBootstrapFlakePath}#${config.networking.hostName}
@@ -254,7 +320,7 @@ in
 
   systemd.services.homelab-ensure-flux-sops-age = {
     description = "Ensure Flux sync and sops-age secret exist";
-    after = [ "k3s.service" "network-online.target" ];
+    after = [ "homelab-reconcile-flux.service" "k3s.service" "network-online.target" ];
     wants = [ "k3s.service" "network-online.target" ];
     path = [ pkgs.kubectl pkgs.bash pkgs.coreutils ];
     serviceConfig = {
@@ -331,8 +397,6 @@ in
     "d /srv/immich/postgres 0700 999 999 -"
     "d /srv/immich/redis 0750 999 root -"
     "d /srv/libsql 0755 root root -"
-    "d /srv/libsql/backups 0750 root root -"
-    "d /srv/libsql/data 0750 root root -"
     "d /srv/libsql/plarza 0750 666 666 -"
     "d /srv/libsql/spinyourlife 0750 666 666 -"
     "d /srv/kopia/repository 0750 root root -"
@@ -348,21 +412,21 @@ in
     after = [ "docker.service" "network-online.target" ];
     wants = [ "docker.service" "network-online.target" ];
     wantedBy = [ "multi-user.target" ];
-    path = [ pkgs.docker_29 pkgs.bash ];
+    path = [ pkgs.docker pkgs.bash ];
     serviceConfig = {
       Type = "simple";
       Restart = "always";
       RestartSec = "5s";
-      ExecStop = "-${pkgs.docker_29}/bin/docker stop homelab-registry";
+      ExecStop = "-${pkgs.docker}/bin/docker stop homelab-registry";
     };
     preStart = ''
-      ${pkgs.docker_29}/bin/docker rm -f homelab-registry registry >/dev/null 2>&1 || true
+      ${pkgs.docker}/bin/docker rm -f homelab-registry registry >/dev/null 2>&1 || true
     '';
     script = ''
-      exec ${pkgs.docker_29}/bin/docker run --rm --name homelab-registry \
+      exec ${pkgs.docker}/bin/docker run --rm --pull=always --name homelab-registry \
         -p 127.0.0.1:5000:5000 \
         -v /srv/registry:/var/lib/registry \
-        registry:2
+        registry:latest
     '';
   };
 
@@ -383,7 +447,7 @@ in
     path = [
       pkgs.bash
       pkgs.coreutils
-      pkgs.docker_29
+      pkgs.docker
       pkgs.git
       pkgs.kubectl
       pkgs.openssh
@@ -493,7 +557,7 @@ in
     path = [
       pkgs.bash
       pkgs.coreutils
-      pkgs.docker_29
+      pkgs.docker
       pkgs.git
       pkgs.kubectl
       pkgs.openssh
@@ -574,6 +638,47 @@ in
     };
   };
 
+  systemd.services.homelab-refresh-floating-images = {
+    description = "Refresh Kubernetes workloads that track public latest images";
+    after = [ "k3s.service" "network-online.target" ];
+    wants = [ "k3s.service" "network-online.target" ];
+    path = [ pkgs.kubectl pkgs.jq pkgs.bash pkgs.coreutils ];
+    serviceConfig = {
+      Type = "oneshot";
+      User = "root";
+    };
+    script = ''
+      set -euo pipefail
+      export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+
+      kubectl get deployments.apps -A -o json \
+        | jq -r '
+            .items[]
+            | select(any(
+                ((.spec.template.spec.initContainers // []) + .spec.template.spec.containers)[];
+                (.image | endswith(":latest")) and (.image | startswith("localhost:5000/") | not)
+              ))
+            | [.metadata.namespace, .metadata.name]
+            | @tsv
+          ' \
+        | while IFS=$'\t' read -r namespace name; do
+            echo "homelab-refresh-floating-images: refreshing $namespace/$name"
+            kubectl -n "$namespace" rollout restart "deployment/$name"
+            kubectl -n "$namespace" rollout status "deployment/$name" --timeout=10m
+          done
+    '';
+  };
+
+  systemd.timers.homelab-refresh-floating-images = {
+    description = "Refresh floating Kubernetes images every night";
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnCalendar = "*-*-* 03:30:00";
+      Persistent = true;
+      RandomizedDelaySec = "15m";
+    };
+  };
+
   systemd.services.kopia-host-backup = {
     description = "Kopia host snapshots to local repository";
     after = [ "network-online.target" "k3s.service" ];
@@ -639,6 +744,10 @@ in
           command = "/run/current-system/sw/bin/nixos-rebuild";
           options = [ "NOPASSWD" ];
         }
+        {
+          command = "/run/current-system/sw/bin/homelab-sync-bootstrap";
+          options = [ "NOPASSWD" ];
+        }
       ];
     }
   ];
@@ -646,5 +755,6 @@ in
   nixpkgs.config.allowUnfree = true;
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
 
+  # This records the original install version and must not be changed during upgrades.
   system.stateVersion = "25.11";
 }

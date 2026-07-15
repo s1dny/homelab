@@ -4,7 +4,11 @@ Personal homelab configuration for a Dell Optiplex 7060 (`azalab-0`) running Nix
 Defaults are hardcoded to my setup (domain, hostnames, SSH keys, etc.). If you want to change the defaults, fork the repo and edit them there.
 
 ## Deployment workflow
-Hosts update all flake inputs and rebuild automatically every night. To apply changes immediately:
+Hosts update all flake inputs and rebuild automatically every night. Nixpkgs follows the
+version declared by the homelab flake, so operating-system release upgrades are picked up
+without maintaining a second version pin in `/etc/nixos`.
+
+To apply changes immediately:
 
 ```bash
 cd /etc/nixos
@@ -16,7 +20,14 @@ or
 sync.sh
 ```
 
-`sync.sh` uses passwordless sudo for the exact `nix` and `nixos-rebuild` commands it runs. After changing that sudoers rule, run the rebuild once with normal sudo; subsequent `sync.sh` runs should not prompt.
+`sync.sh` first rebuilds the current homelab module, synchronizes the small bootstrap flake
+when it changed, and then performs a second rebuild only when required. It uses passwordless
+sudo for the exact commands involved. After changing those sudoers rules, run the rebuild
+once with normal sudo; subsequent `sync.sh` runs should not prompt.
+
+When introducing bootstrap synchronization on a host installed from an older revision of this
+repository, run `sync.sh` twice. The first run installs the helper and the second updates the
+bootstrap flake to the shared Nixpkgs input.
 
 ## Prerequisites
 - Domain in Cloudflare: `aza.network`

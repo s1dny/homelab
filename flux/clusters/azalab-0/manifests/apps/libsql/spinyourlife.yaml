@@ -16,7 +16,7 @@ spec:
       containers:
         - name: libsql
           image: ghcr.io/tursodatabase/libsql-server:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           env:
             - name: SQLD_NODE
               value: primary

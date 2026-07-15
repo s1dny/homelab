@@ -22,8 +22,8 @@ spec:
           type: RuntimeDefault
       containers:
         - name: libsql
-          image: ghcr.io/tursodatabase/libsql-server@sha256:817fb6c6865d048a509f5c120905629fb9b5af20ad0c526cdc68a6d8793898ad
-          imagePullPolicy: IfNotPresent
+          image: ghcr.io/tursodatabase/libsql-server:latest
+          imagePullPolicy: Always
           env:
             - name: SQLD_NODE
               value: primary

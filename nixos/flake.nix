@@ -2,8 +2,8 @@
   description = "Host bootstrap flake for homelab";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
     homelab.url = "github:s1dny/homelab";
+    nixpkgs.follows = "homelab/nixpkgs";
   };
 
   outputs = { nixpkgs, homelab, ... }:
