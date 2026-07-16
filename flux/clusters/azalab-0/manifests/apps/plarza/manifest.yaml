@@ -139,8 +139,6 @@ spec:
               value: 0.0.0.0
             - name: PORT
               value: "3000"
-            - name: ORIGIN
-              value: https://plarza.com
             - name: BODY_SIZE_LIMIT
               value: 34M
             - name: SHUTDOWN_TIMEOUT
