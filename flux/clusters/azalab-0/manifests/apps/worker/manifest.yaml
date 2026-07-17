@@ -9,10 +9,7 @@ spec:
     matchLabels:
       app: plarza-worker
   strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 1
-      maxUnavailable: 0
+    type: Recreate
   template:
     metadata:
       labels:
@@ -52,6 +49,7 @@ spec:
           ports:
             - name: http
               containerPort: 3009
+              hostPort: 3009
           readinessProbe:
             tcpSocket:
               port: http
