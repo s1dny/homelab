@@ -401,6 +401,7 @@ in
     "d /srv/libsql/spinyourlife 0750 666 666 -"
     "d /srv/kopia/repository 0750 root root -"
     "d /srv/plarza-deploy 0750 ${defaultHostUsername} users -"
+    "d /srv/plarza-worker-deploy 0750 ${defaultHostUsername} users -"
     "d /srv/registry 0755 root root -"
     "d /srv/spinyourlife-deploy 0750 ${defaultHostUsername} users -"
     "d /srv/tuwunel/data 0750 root root -"
@@ -534,6 +535,120 @@ in
     wantedBy = [ "timers.target" ];
     timerConfig = {
       OnBootSec = "45s";
+      OnUnitActiveSec = "1m";
+      AccuracySec = "10s";
+      Persistent = false;
+    };
+  };
+
+  systemd.services.plarza-worker-auto-deploy = {
+    description = "Build and deploy the Plarza worker from GitHub";
+    after = [
+      "docker.service"
+      "homelab-local-registry.service"
+      "k3s.service"
+      "network-online.target"
+    ];
+    wants = [
+      "docker.service"
+      "homelab-local-registry.service"
+      "k3s.service"
+      "network-online.target"
+    ];
+    path = [
+      pkgs.bash
+      pkgs.coreutils
+      pkgs.docker
+      pkgs.git
+      pkgs.kubectl
+      pkgs.openssh
+      pkgs.util-linux
+    ];
+    serviceConfig = {
+      Type = "oneshot";
+      User = defaultHostUsername;
+      Group = "users";
+      SupplementaryGroups = [ "docker" "wheel" ];
+      WorkingDirectory = "/srv/plarza-worker-deploy";
+      TimeoutStartSec = "30m";
+    };
+    script = ''
+      set -euo pipefail
+
+      export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+
+      repo_url="git@github.com:plarza/worker.git"
+      branch="main"
+      app_dir="/srv/plarza-worker-deploy/repo"
+      state_file="/srv/plarza-worker-deploy/deployed-rev"
+      lock_file="/srv/plarza-worker-deploy/deploy.lock"
+      image="localhost:5000/plarza-worker:latest"
+
+      exec 9>"$lock_file"
+      if ! flock -n 9; then
+        echo "plarza-worker-auto-deploy: another deploy is already running"
+        exit 0
+      fi
+
+      if [[ ! -r "$KUBECONFIG" ]]; then
+        echo "plarza-worker-auto-deploy: kubeconfig is not readable yet"
+        exit 0
+      fi
+
+      if ! kubectl -n plarza get deployment plarza-worker >/dev/null 2>&1; then
+        echo "plarza-worker-auto-deploy: deployment is not available yet"
+        exit 0
+      fi
+
+      if ! kubectl -n plarza get secret plarza-worker >/dev/null 2>&1; then
+        echo "plarza-worker-auto-deploy: worker secret is not available yet"
+        exit 0
+      fi
+
+      if [[ ! -d "$app_dir/.git" ]]; then
+        rm -rf "$app_dir"
+        git clone --branch "$branch" "$repo_url" "$app_dir"
+      fi
+
+      cd "$app_dir"
+      git fetch --prune origin "$branch"
+      target_rev="$(git rev-parse "origin/$branch")"
+      deployed_rev="$(cat "$state_file" 2>/dev/null || true)"
+
+      if [[ "$target_rev" == "$deployed_rev" ]]; then
+        echo "plarza-worker-auto-deploy: already deployed $target_rev"
+        exit 0
+      fi
+
+      git checkout -B "$branch" "$target_rev"
+      docker build --no-cache \
+        --build-arg SOURCE_REV="$target_rev" \
+        -t "$image" .
+      docker push "$image"
+
+      kubectl -n plarza rollout restart deployment/plarza-worker
+      kubectl -n plarza rollout status deployment/plarza-worker --timeout=10m
+
+      running_rev="$(kubectl -n plarza exec deployment/plarza-worker -- cat /app/.source-rev)"
+      if [[ "$running_rev" != "$target_rev" ]]; then
+        echo "plarza-worker-auto-deploy: running revision $running_rev does not match target $target_rev"
+        exit 1
+      fi
+
+      # Remove the legacy Compose container only after Kubernetes is serving the
+      # verified revision. This is idempotent on subsequent deployments.
+      docker rm -f worker >/dev/null 2>&1 || true
+
+      printf '%s\n' "$target_rev" > "$state_file"
+      echo "plarza-worker-auto-deploy: deployed $target_rev"
+    '';
+  };
+
+  systemd.timers.plarza-worker-auto-deploy = {
+    description = "Poll GitHub and deploy Plarza worker changes";
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnBootSec = "75s";
       OnUnitActiveSec = "1m";
       AccuracySec = "10s";
       Persistent = false;
