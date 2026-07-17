@@ -19,6 +19,7 @@ let
   };
   defaultHostHostname = "azalab-0";
   defaultHostUsername = "aiden";
+  dockerPackage = pkgs.docker_29;
   defaultHostAuthorizedKeys = [
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGNLDRhkSlst/ch4vyH8gm3bh79BRB4MIdLiB/jrT5w6 aiden@plarza.com"
   ];
@@ -81,7 +82,7 @@ in
 
   virtualisation.docker = {
     enable = true;
-    package = pkgs.docker;
+    package = dockerPackage;
   };
 
   programs.fish.enable = true;
@@ -208,7 +209,7 @@ in
     description = "Install and reconcile Flux";
     after = [ "docker.service" "k3s.service" "network-online.target" ];
     wants = [ "docker.service" "k3s.service" "network-online.target" ];
-    path = [ pkgs.docker pkgs.kubectl pkgs.gnugrep pkgs.bash pkgs.coreutils ];
+    path = [ dockerPackage pkgs.kubectl pkgs.gnugrep pkgs.bash pkgs.coreutils ];
     serviceConfig = {
       Type = "oneshot";
       User = "root";
@@ -230,7 +231,7 @@ in
         kubectl -n flux-system wait --for=condition=Available deployment \
           -l app.kubernetes.io/part-of=flux --timeout=10m
 
-        ${pkgs.docker}/bin/docker run --rm --pull=always --network=host \
+        ${dockerPackage}/bin/docker run --rm --pull=always --network=host \
           -v /etc/rancher/k3s/k3s.yaml:/kubeconfig:ro \
           ghcr.io/fluxcd/flux-cli:v2.9.2 \
           --kubeconfig=/kubeconfig migrate
@@ -413,18 +414,18 @@ in
     after = [ "docker.service" "network-online.target" ];
     wants = [ "docker.service" "network-online.target" ];
     wantedBy = [ "multi-user.target" ];
-    path = [ pkgs.docker pkgs.bash ];
+    path = [ dockerPackage pkgs.bash ];
     serviceConfig = {
       Type = "simple";
       Restart = "always";
       RestartSec = "5s";
-      ExecStop = "-${pkgs.docker}/bin/docker stop homelab-registry";
+      ExecStop = "-${dockerPackage}/bin/docker stop homelab-registry";
     };
     preStart = ''
-      ${pkgs.docker}/bin/docker rm -f homelab-registry registry >/dev/null 2>&1 || true
+      ${dockerPackage}/bin/docker rm -f homelab-registry registry >/dev/null 2>&1 || true
     '';
     script = ''
-      exec ${pkgs.docker}/bin/docker run --rm --pull=always --name homelab-registry \
+      exec ${dockerPackage}/bin/docker run --rm --pull=always --name homelab-registry \
         -p 127.0.0.1:5000:5000 \
         -v /srv/registry:/var/lib/registry \
         registry:latest
@@ -448,7 +449,7 @@ in
     path = [
       pkgs.bash
       pkgs.coreutils
-      pkgs.docker
+      dockerPackage
       pkgs.git
       pkgs.kubectl
       pkgs.openssh
@@ -558,7 +559,7 @@ in
     path = [
       pkgs.bash
       pkgs.coreutils
-      pkgs.docker
+      dockerPackage
       pkgs.git
       pkgs.kubectl
       pkgs.openssh
@@ -672,7 +673,7 @@ in
     path = [
       pkgs.bash
       pkgs.coreutils
-      pkgs.docker
+      dockerPackage
       pkgs.git
       pkgs.kubectl
       pkgs.openssh
