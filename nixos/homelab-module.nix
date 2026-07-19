@@ -641,8 +641,10 @@ in
     path = [
       pkgs.bash
       pkgs.coreutils
+      pkgs.curl
       dockerPackage
       pkgs.git
+      pkgs.jq
       pkgs.kubectl
       pkgs.openssh
       pkgs.util-linux
@@ -703,13 +705,40 @@ in
         exit 0
       fi
 
+      api_key="$(kubectl -n plarza get secret plarza-worker -o jsonpath='{.data.API_KEY}' | base64 --decode)"
+      if ! tasks_json="$(curl --fail --silent --show-error --max-time 10 \
+        -H "Authorization: Bearer $api_key" \
+        https://worker.aza.network/tasks)"; then
+        echo "plarza-worker-auto-deploy: unable to verify active tasks; deferring deploy"
+        exit 0
+      fi
+      if ! active_tasks="$(jq -er '.count | numbers' <<<"$tasks_json")"; then
+        echo "plarza-worker-auto-deploy: invalid task response; deferring deploy"
+        exit 0
+      fi
+      if (( active_tasks > 0 )); then
+        echo "plarza-worker-auto-deploy: deferring $target_rev while $active_tasks task(s) are active"
+        exit 0
+      fi
+
       git checkout -B "$branch" "$target_rev"
       docker build --no-cache \
         --build-arg SOURCE_REV="$target_rev" \
         -t "$image" .
       docker push "$image"
 
-      kubectl -n plarza rollout restart deployment/plarza-worker
+      # Pull the mutable local-registry image by replacing the pod directly.
+      # This leaves the Flux-owned Deployment template untouched, avoiding a
+      # second reconciliation restart several minutes after each deploy.
+      running_pod="$(kubectl -n plarza get pods \
+        -l app=plarza-worker \
+        --field-selector=status.phase=Running \
+        -o name | head -n 1)"
+      if [[ -z "$running_pod" ]]; then
+        echo "plarza-worker-auto-deploy: no running worker pod found"
+        exit 1
+      fi
+      kubectl -n plarza delete "$running_pod" --wait=true
       kubectl -n plarza rollout status deployment/plarza-worker --timeout=10m
 
       running_rev="$(kubectl -n plarza exec deployment/plarza-worker -- cat /app/.source-rev)"
