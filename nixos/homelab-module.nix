@@ -494,7 +494,7 @@ in
 
       cd "$app_dir"
       git fetch --prune origin "$branch"
-      target_rev="$(git rev-parse "origin/$branch")"
+      target_rev="$(git rev-parse FETCH_HEAD)"
       deployed_rev="$(cat "$state_file" 2>/dev/null || true)"
 
       if [[ "$target_rev" == "$deployed_rev" ]]; then
