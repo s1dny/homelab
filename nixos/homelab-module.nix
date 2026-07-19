@@ -401,6 +401,7 @@ in
     "d /srv/libsql 0755 root root -"
     "d /srv/libsql/plarza 0750 666 666 -"
     "d /srv/libsql/spinyourlife 0750 666 666 -"
+    "d /srv/plarza-dashboard-deploy 0750 ${defaultHostUsername} users -"
     "d /srv/rustic/repository 0700 root root -"
     "d /srv/plarza-deploy 0750 ${defaultHostUsername} users -"
     "d /srv/plarza-worker-deploy 0750 ${defaultHostUsername} users -"
@@ -529,6 +530,87 @@ in
       printf '%s\n' "$target_rev" > "$state_file"
       echo "plarza-auto-deploy: deployed $target_rev"
     '';
+  };
+
+  systemd.services.plarza-dashboard-auto-deploy = {
+    description = "Deploy the Plarza observability dashboard from GitHub";
+    after = [ "docker.service" "network-online.target" ];
+    wants = [ "docker.service" "network-online.target" ];
+    path = [
+      pkgs.bash
+      pkgs.coreutils
+      dockerPackage
+      pkgs.git
+      pkgs.jq
+      pkgs.openssh
+      pkgs.util-linux
+    ];
+    serviceConfig = {
+      Type = "oneshot";
+      User = defaultHostUsername;
+      Group = "users";
+      SupplementaryGroups = [ "docker" ];
+      WorkingDirectory = "/srv/plarza-dashboard-deploy";
+      TimeoutStartSec = "10m";
+    };
+    script = ''
+      set -euo pipefail
+
+      repo_url="git@github.com:plarza/dashboard.git"
+      branch="main"
+      app_dir="/srv/plarza-dashboard-deploy/repo"
+      state_file="/srv/plarza-dashboard-deploy/deployed-rev"
+      lock_file="/srv/plarza-dashboard-deploy/deploy.lock"
+      env_file="/home/${defaultHostUsername}/plarza/dashboard/.env"
+      project="dashboard"
+
+      exec 9>"$lock_file"
+      if ! flock -n 9; then
+        echo "plarza-dashboard-auto-deploy: another deploy is already running"
+        exit 0
+      fi
+
+      if [[ ! -r "$env_file" ]]; then
+        echo "plarza-dashboard-auto-deploy: $env_file is not readable"
+        exit 1
+      fi
+
+      if [[ ! -d "$app_dir/.git" ]]; then
+        rm -rf "$app_dir"
+        git clone --branch "$branch" "$repo_url" "$app_dir"
+      fi
+
+      cd "$app_dir"
+      git fetch --prune origin "$branch"
+      target_rev="$(git rev-parse "origin/$branch")"
+      deployed_rev="$(cat "$state_file" 2>/dev/null || true)"
+
+      if [[ "$target_rev" == "$deployed_rev" ]]; then
+        echo "plarza-dashboard-auto-deploy: already deployed $target_rev"
+        exit 0
+      fi
+
+      git checkout -B "$branch" "$target_rev"
+      jq empty grafana/dashboards/*.json
+      docker compose --project-name "$project" --env-file "$env_file" config --quiet
+      docker compose --project-name "$project" --env-file "$env_file" pull
+      docker compose --project-name "$project" --env-file "$env_file" \
+        up -d --remove-orphans --wait --wait-timeout 120
+
+      printf '%s\n' "$target_rev" > "$state_file"
+      echo "plarza-dashboard-auto-deploy: deployed $target_rev"
+    '';
+  };
+
+  systemd.timers.plarza-dashboard-auto-deploy = {
+    description = "Poll GitHub and deploy Plarza dashboard changes";
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnBootSec = "60s";
+      OnUnitActiveSec = "1m";
+      AccuracySec = "10s";
+      Persistent = false;
+    };
   };
 
   systemd.timers.plarza-auto-deploy = {
