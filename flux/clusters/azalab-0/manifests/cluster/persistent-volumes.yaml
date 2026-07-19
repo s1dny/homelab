@@ -117,35 +117,6 @@ spec:
 apiVersion: v1
 kind: PersistentVolume
 metadata:
-  name: kopia-repo-pv
-spec:
-  capacity:
-    storage: 1Ti
-  accessModes:
-    - ReadWriteOnce
-  persistentVolumeReclaimPolicy: Retain
-  storageClassName: ""
-  hostPath:
-    path: /srv/kopia/repository
-    type: DirectoryOrCreate
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: kopia-repo-pvc
-  namespace: backup
-spec:
-  accessModes:
-    - ReadWriteOnce
-  storageClassName: ""
-  resources:
-    requests:
-      storage: 1Ti
-  volumeName: kopia-repo-pv
----
-apiVersion: v1
-kind: PersistentVolume
-metadata:
   name: tuwunel-data-pv
 spec:
   capacity:

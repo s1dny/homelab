@@ -20,6 +20,25 @@ spec:
         fsGroupChangePolicy: OnRootMismatch
         seccompProfile:
           type: RuntimeDefault
+      initContainers:
+        - name: clear-stale-replication-snapshots
+          image: ghcr.io/tursodatabase/libsql-server:latest
+          imagePullPolicy: Always
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              rm -f /var/lib/sqld/plarza.db/dbs/*/snapshots/*.snap
+          securityContext:
+            runAsUser: 666
+            runAsGroup: 666
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/sqld
       containers:
         - name: libsql
           image: ghcr.io/tursodatabase/libsql-server:latest

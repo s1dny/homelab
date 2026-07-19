@@ -6,7 +6,7 @@ let
   homelabBootstrapFlakePath = "/etc/nixos";
   homelabRuntimeSecretsDir = "/run/secrets/homelab";
   homelabCloudflaredSecretsFile = "${homelabRuntimeSecretsDir}/cloudflare-tunnel-token.env";
-  homelabKopiaR2SecretsFile = "${homelabRuntimeSecretsDir}/kopia-r2.env";
+  homelabRusticProtonSecretsFile = "${homelabRuntimeSecretsDir}/rustic-proton.env";
   homelabHostSecretsSopsFile = "${homelabSrc}/nixos/secrets/host-secrets.sops.yaml";
   homelabSopsAgeKeyFile = "/var/lib/sops-nix/key.txt";
   fluxTransitionManifest = pkgs.fetchurl {
@@ -112,7 +112,8 @@ in
     git
     jq
     k3s
-    kopia
+    rclone
+    rustic
     kubectl
     kubernetes-helm
     libclang
@@ -186,11 +187,11 @@ in
     mode = "0400";
     restartUnits = [ "cloudflared-dashboard-tunnel.service" ];
   };
-  sops.secrets."homelab/kopia-r2.env" = {
+  sops.secrets."homelab/rustic-proton.env" = {
     sopsFile = homelabHostSecretsSopsFile;
     format = "yaml";
-    key = "kopia_r2_env";
-    path = homelabKopiaR2SecretsFile;
+    key = "rustic_proton_env";
+    path = homelabRusticProtonSecretsFile;
     owner = "root";
     group = "root";
     mode = "0400";
@@ -400,13 +401,12 @@ in
     "d /srv/libsql 0755 root root -"
     "d /srv/libsql/plarza 0750 666 666 -"
     "d /srv/libsql/spinyourlife 0750 666 666 -"
-    "d /srv/kopia/repository 0750 root root -"
+    "d /srv/rustic/repository 0700 root root -"
     "d /srv/plarza-deploy 0750 ${defaultHostUsername} users -"
     "d /srv/plarza-worker-deploy 0750 ${defaultHostUsername} users -"
     "d /srv/registry 0755 root root -"
     "d /srv/spinyourlife-deploy 0750 ${defaultHostUsername} users -"
     "d /srv/tuwunel/data 0750 root root -"
-    "d /var/lib/kopia 0700 root root -"
   ];
 
   systemd.services.homelab-local-registry = {
@@ -795,49 +795,29 @@ in
     };
   };
 
-  systemd.services.kopia-host-backup = {
-    description = "Kopia host snapshots to local repository";
+  systemd.services.rustic-host-backup = {
+    description = "Rustic host backup and Proton Drive mirror";
     after = [ "network-online.target" "k3s.service" ];
     wants = [ "network-online.target" ];
-    path = [ pkgs.kopia pkgs.coreutils pkgs.bash ];
+    path = [ pkgs.rustic pkgs.rclone pkgs.coreutils pkgs.util-linux pkgs.bash ];
     serviceConfig = {
       Type = "oneshot";
       User = "root";
-      EnvironmentFile = homelabKopiaR2SecretsFile;
-      ExecStart = "${pkgs.bash}/bin/bash ${homelabSourcePath}/scripts/kopia-host-backup.sh";
+      EnvironmentFile = homelabRusticProtonSecretsFile;
+      ExecStart = "${pkgs.bash}/bin/bash ${homelabSourcePath}/scripts/rustic-host-backup.sh";
+      TimeoutStartSec = "12h";
+      Nice = 10;
+      IOSchedulingClass = "idle";
     };
   };
 
-  systemd.timers.kopia-host-backup = {
-    description = "Run Kopia host backup every night";
+  systemd.timers.rustic-host-backup = {
+    description = "Run Rustic backup and Proton Drive mirror every night";
     wantedBy = [ "timers.target" ];
     timerConfig = {
       OnCalendar = "*-*-* 02:30:00";
       Persistent = true;
       RandomizedDelaySec = "10m";
-    };
-  };
-
-  systemd.services.kopia-r2-sync = {
-    description = "Kopia sync local repository to Cloudflare R2";
-    after = [ "network-online.target" "kopia-host-backup.service" ];
-    wants = [ "network-online.target" ];
-    path = [ pkgs.kopia pkgs.coreutils pkgs.bash ];
-    serviceConfig = {
-      Type = "oneshot";
-      User = "root";
-      EnvironmentFile = homelabKopiaR2SecretsFile;
-      ExecStart = "${pkgs.bash}/bin/bash ${homelabSourcePath}/scripts/kopia-r2-sync.sh";
-    };
-  };
-
-  systemd.timers.kopia-r2-sync = {
-    description = "Run Kopia R2 sync every 6 hours";
-    wantedBy = [ "timers.target" ];
-    timerConfig = {
-      OnCalendar = "*-*-* 00/6:10:00";
-      Persistent = true;
-      RandomizedDelaySec = "15m";
     };
   };
 

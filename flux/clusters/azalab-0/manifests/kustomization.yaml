@@ -9,7 +9,6 @@ resources:
   - apps/worker/manifest.yaml
   - apps/libsql/spinyourlife.yaml
   - apps/spinyourlife/manifest.yaml
-  - apps/kopia/manifest.yaml
   - apps/immich/postgres.yaml
   - apps/immich/repository.yaml
   - apps/immich/image-automation.yaml

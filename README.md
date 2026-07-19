@@ -109,7 +109,6 @@ bootstrap flake to the shared Nixpkgs input.
 ## Cloudflare Tunnel
 In Cloudflare Zero Trust dashboard, create a tunnel named the same as your cluster (for example `azalab-0`) with these hostnames:
 - `photos.aza.network` -> `http://localhost:80`
-- `kopia.aza.network` -> `http://localhost:80`
 - `matrix.aza.network` -> `http://localhost:80`
 - `spinyour.life` -> `http://localhost:80`
 
@@ -127,39 +126,34 @@ homelab-check-k8s-health
 ```
 
 ## Cloudflare Access
-Put `photos.aza.network` and `kopia.aza.network` behind Cloudflare Access.
+Put `photos.aza.network` behind Cloudflare Access.
 
 For `spinyour.life`, remove the Cloudflare Worker route/custom domain and point
 the hostname at the `azalab-0` tunnel public hostname above. Keep
 `db.spinyour.life` routed to `http://localhost:80` if the app should continue
 using the public libSQL endpoint outside the cluster.
 
-## Kopia Backups
-`flux/clusters/<cluster>/manifests/apps/kopia/manifest.yaml` uses `--insecure` and `--disable-csrf-token-checks`. Keep `kopia.aza.network` behind Cloudflare Access.
+## Rustic Backups
 
-`KOPIA_R2_ENDPOINT` format: `https://<accountid>.r2.cloudflarestorage.com`
+`rustic-host-backup.timer` creates a nightly encrypted local repository at
+`/srv/rustic/repository`, applies retention, then mirrors the repository to
+`azalab-0/rustic` in Proton Drive with rclone.
 
-Timers run automatically (`kopia-host-backup.timer`, `kopia-r2-sync.timer`). Run manually if needed:
-```bash
-sudo systemctl start kopia-host-backup.service
-sudo systemctl start kopia-r2-sync.service
+Add `rustic_proton_env` to `nixos/secrets/host-secrets.sops.yaml` with:
+
+```text
+RUSTIC_PASSWORD=<the former KOPIA_REPOSITORY_PASSWORD used to initialize Rustic>
+RCLONE_PROTONDRIVE_USERNAME=<Proton username>
+RCLONE_PROTONDRIVE_PASSWORD=<output of: rclone obscure 'password'>
+RCLONE_PROTONDRIVE_OTP_SECRET_KEY=<optional output of: rclone obscure 'OTP secret'>
 ```
 
-## MacBook Backup
-```bash
-brew install cloudflared kopia
-cloudflared access tcp --hostname kopia.aza.network --url localhost:15151
-```
+Run and inspect it manually with:
 
-In another terminal:
 ```bash
-kopia repository connect server \
-  --url=http://127.0.0.1:15151 \
-  --override-hostname=kopia.aza.network \
-  --server-username=YOUR_USERNAME \
-  --server-password=YOUR_PASSWORD
-
-kopia snapshot create ~/Documents ~/Pictures ~/Desktop
+sudo systemctl start rustic-host-backup.service
+sudo systemctl status rustic-host-backup.service
+sudo journalctl -u rustic-host-backup.service
 ```
 
 ## Verification
