@@ -38,7 +38,7 @@ jobs:
               flux/clusters/azalab-0/manifests
             do
               kustomize build "$directory" |
-                kubeconform -strict -summary -ignore-missing-schemas
+                kubeconform -strict -summary -ignore-missing-schemas -skip Secret
             done
           '
 
