@@ -10,9 +10,12 @@ cluster. Each successful `main` build publishes a unique image to GHCR and recor
 build provenance. Flux scans those tags, resolves their digest, and commits only the
 image reference change back to this repository.
 
-All repository CI runs on Blacksmith Ubuntu 24.04 runners. Container repositories use
-Blacksmith's persistent BuildKit cache with a bounded 20 GiB cache and publish only
-from `main`; pull requests run the same checks and image build without registry writes.
+The app, worker, website, and dashboard CI runs on Blacksmith Ubuntu 24.04 runners.
+This personal infrastructure repository uses GitHub-hosted Ubuntu because Blacksmith
+supports organization repositories. Repositories without a build or deployment
+artifact intentionally have no CI. Container repositories use Blacksmith's persistent
+BuildKit cache with a bounded 20 GiB cache and publish only from `main`; pull requests
+run the same checks and image build without registry writes.
 
 ## One-time repository setup
 
@@ -24,7 +27,8 @@ secret in `flux-system` and each workload namespace, then reference it from the
 
 Set the `PUBLIC_POSTHOG_KEY` Actions repository variable in `plarza/app`. It is a
 public build-time value, not a secret. GitHub's automatically issued `GITHUB_TOKEN`
-publishes the package and the workflow creates the provenance attestation.
+publishes the package, and the Blacksmith BuildKit build records registry-native
+provenance metadata.
 
 The `flux-system-write` secret must contain GitHub credentials with permission to
 push only to this repository. Branch protection should require the infrastructure
