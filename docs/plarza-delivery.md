@@ -17,13 +17,16 @@ artifact intentionally have no CI. Container repositories use Blacksmith's persi
 BuildKit cache with a bounded 20 GiB cache and publish only from `main`; pull requests
 run the same checks and image build without registry writes.
 
-## One-time repository setup
+## Private registry access
 
-In both `plarza/app` and `plarza/worker`, set the GHCR package visibility to public.
-This lets both k3s and Flux's image reflector read images without a long-lived GitHub
-token. If packages must remain private, create a read-only `kubernetes.io/dockerconfigjson`
-secret in `flux-system` and each workload namespace, then reference it from the
-`ImageRepository` and pod `imagePullSecrets` before enabling automation.
+The `plarza/app` and `plarza/worker` GHCR packages stay private. A dedicated classic
+GitHub PAT with only `read:packages` access is stored as a SOPS-encrypted
+`kubernetes.io/dockerconfigjson` secret named `plarza-ghcr`. The secret exists in
+both `flux-system`, for image reflection, and `plarza`, for workload pulls. Do not
+reuse a developer token with repository or package-write access.
+
+Rotate the credential by replacing both encrypted Secret documents, waiting for the
+apps Kustomization to reconcile, and then revoking the previous PAT.
 
 Set the `PUBLIC_POSTHOG_KEY` Actions repository variable in `plarza/app`. It is a
 public build-time value, not a secret. GitHub's automatically issued `GITHUB_TOKEN`
@@ -39,7 +42,8 @@ manifest before deleting or rotating the live copy; do not place its plaintext i
 ## Safe migration order
 
 1. Merge the app and worker workflows and run each once on `main`.
-2. Confirm both GHCR packages can be pulled anonymously.
+2. Confirm Flux and a disposable pod can pull both private GHCR packages using the
+   SOPS-managed credential.
 3. Merge this repository. Existing `localhost:5000` image references remain active
    until Flux sees a valid GHCR tag, so installing the controllers cannot cause an
    empty-image rollout.

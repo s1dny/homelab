@@ -7,6 +7,8 @@ spec:
   image: ghcr.io/plarza/app
   interval: 5m0s
   provider: generic
+  secretRef:
+    name: plarza-ghcr
   exclusionList:
     - ^.*\.sig$
 ---
@@ -37,6 +39,8 @@ spec:
   image: ghcr.io/plarza/worker
   interval: 5m0s
   provider: generic
+  secretRef:
+    name: plarza-ghcr
   exclusionList:
     - ^.*\.sig$
 ---

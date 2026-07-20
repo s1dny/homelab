@@ -127,6 +127,8 @@ spec:
       labels:
         app: plarza
     spec:
+      imagePullSecrets:
+        - name: plarza-ghcr
       terminationGracePeriodSeconds: 40
       securityContext:
         runAsGroup: 1000

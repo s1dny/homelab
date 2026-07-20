@@ -3,6 +3,7 @@ kind: Kustomization
 
 resources:
   - apps/secrets.sops.yaml
+  - apps/plarza/ghcr-credentials.sops.yaml
   - apps/plarza/secrets.sops.yaml
   - apps/plarza/image-automation.yaml
   - apps/plarza/manifest.yaml
