@@ -30,7 +30,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: worker
-          image: ghcr.io/plarza/worker:main-4d938e5b1316-5@sha256:36401344446f467f260b42a3d189377d38481a992dc64d45e478fa51e0514b8d # {"$imagepolicy": "flux-system:plarza-worker"}
+          image: ghcr.io/plarza/worker:main-7863fed6040f-6@sha256:787c8936d8498f381f90c9918dba009eea227a62349535068495ab9ef2b1bc92 # {"$imagepolicy": "flux-system:plarza-worker"}
           imagePullPolicy: IfNotPresent
           env:
             - name: API_KEY
