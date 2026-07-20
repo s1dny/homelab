@@ -103,6 +103,6 @@ sudo systemctl start rustic-restore-smoke-test.service
 sudo journalctl -u rustic-host-backup.service -u rustic-restore-smoke-test.service
 ```
 
-The host SOPS identity and Flux SOPS identity are deliberately different. NixOS
-decrypts `flux_age_key` from `host-secrets.sops.yaml` and reconciles only that key into
-`flux-system/sops-age`; cluster controllers never receive the host identity.
+NixOS decrypts the configured Flux age key from `host-secrets.sops.yaml` and
+reconciles it into `flux-system/sops-age`. Rotate the repository recipients and the
+live secret as one staged operation so Flux always retains a usable decryption key.

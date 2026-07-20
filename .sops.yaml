@@ -2,4 +2,4 @@ creation_rules:
   - path_regex: ^nixos/secrets/host-secrets\.sops\.yaml$
     age: age1w9s7424jtltmns70e4xw5u7gnnktxdn2de0ssvapee7lvp7xtyeskyrylx
   - path_regex: ^flux/clusters/azalab-0/manifests/apps/.*\.sops\.yaml$
-    age: age1vgnp0qs4w0yyy6r8shpjea6tepyygdj4xr2wvx8dkg9af7te648s9drfsm
+    age: age1w9s7424jtltmns70e4xw5u7gnnktxdn2de0ssvapee7lvp7xtyeskyrylx
