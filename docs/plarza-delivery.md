@@ -10,7 +10,7 @@ cluster. Each successful `main` build publishes a unique image to GHCR and recor
 build provenance. Flux scans those tags, resolves their digest, and commits only the
 image reference change back to this repository.
 
-The app, worker, website, and dashboard CI runs on Blacksmith Ubuntu 24.04 runners.
+The app, worker, website, and dashboard CI run on Blacksmith Ubuntu 24.04 runners.
 This personal infrastructure repository uses GitHub-hosted Ubuntu because Blacksmith
 supports organization repositories. Repositories without a build or deployment
 artifact intentionally have no CI. Container repositories use Blacksmith's persistent
@@ -33,24 +33,11 @@ public build-time value, not a secret. GitHub's automatically issued `GITHUB_TOK
 publishes the package, and the Blacksmith BuildKit build records registry-native
 provenance metadata.
 
-The `flux-system-write` secret must contain GitHub credentials with permission to
-push only to this repository. Branch protection should require the infrastructure
-validation workflow while allowing that bot identity to update image markers.
-It is currently a bootstrap-managed live secret. Import it into a SOPS-encrypted
-manifest before deleting or rotating the live copy; do not place its plaintext in Git.
-
-## Safe migration order
-
-1. Merge the app and worker workflows and run each once on `main`.
-2. Confirm Flux and a disposable pod can pull both private GHCR packages using the
-   SOPS-managed credential.
-3. Merge this repository. Existing `localhost:5000` image references remain active
-   until Flux sees a valid GHCR tag, so installing the controllers cannot cause an
-   empty-image rollout.
-4. Confirm the image policies have selected tags and the automation commits digest
-   references.
-5. Deploy the NixOS closure with deploy-rs. This removes the old host-side app and
-   worker build timers only after the replacement delivery path is working.
+The `flux-system-write` GitHub credential is stored in the host SOPS file and
+reconciled by NixOS before the Flux Git source is applied. Its identity should have
+permission to push only to this repository. Branch protection should require the
+infrastructure validation workflow while allowing that identity to update image
+markers.
 
 ## Deploy and verify
 

@@ -115,13 +115,13 @@ distribution currently supports Flux 2.8.x, so it deliberately does not take ove
 newer controllers or repository sync. Reconciliation is ordered
 `infrastructure` -> `platform` -> `apps`.
 
-The only runtime secret bridge is `homelab-ensure-flux-sops-age.service`. It materializes
-the dedicated Flux identity from the host-encrypted secret file into
-`flux-system/sops-age`. It never copies the host's own SOPS identity into Kubernetes.
+The runtime secret bridge is `homelab-ensure-flux-bootstrap.service`. It materializes
+the dedicated Flux age identity and Git credential from the host-encrypted secret file
+into `flux-system`. It never copies the host's own SOPS identity into Kubernetes.
 
 Check it with:
 ```bash
-systemctl status homelab-ensure-flux-sops-age.service
+systemctl status homelab-ensure-flux-bootstrap.service
 homelab-check-k8s-health
 ```
 

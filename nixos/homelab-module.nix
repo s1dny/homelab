@@ -7,6 +7,7 @@ let
   homelabCloudflaredSecretsFile = "${homelabRuntimeSecretsDir}/cloudflare-tunnel-token.env";
   homelabRusticProtonSecretsFile = "${homelabRuntimeSecretsDir}/rustic-proton.env";
   homelabFluxAgeKeyFile = "${homelabRuntimeSecretsDir}/flux-age-key.txt";
+  homelabFluxGitCredentialsFile = "${homelabRuntimeSecretsDir}/flux-git-credentials.env";
   homelabHostSecretsSopsFile = ./secrets/host-secrets.sops.yaml;
   homelabSopsAgeKeyFile = "/var/lib/sops-nix/key.txt";
   fluxTransitionManifest = pkgs.fetchurl {
@@ -182,7 +183,17 @@ in
     owner = "root";
     group = "root";
     mode = "0400";
-    restartUnits = [ "homelab-ensure-flux-sops-age.service" ];
+    restartUnits = [ "homelab-ensure-flux-bootstrap.service" ];
+  };
+  sops.secrets."homelab/flux-git-credentials.env" = {
+    sopsFile = homelabHostSecretsSopsFile;
+    format = "yaml";
+    key = "flux_git_credentials_env";
+    path = homelabFluxGitCredentialsFile;
+    owner = "root";
+    group = "root";
+    mode = "0400";
+    restartUnits = [ "homelab-ensure-flux-bootstrap.service" ];
   };
   services.k3s = {
     enable = true;
@@ -273,8 +284,8 @@ in
     '';
   };
 
-  systemd.services.homelab-ensure-flux-sops-age = {
-    description = "Ensure Flux sync and sops-age secret exist";
+  systemd.services.homelab-ensure-flux-bootstrap = {
+    description = "Ensure Flux bootstrap credentials and sync resources exist";
     after = [ "homelab-reconcile-flux.service" "k3s.service" "network-online.target" ];
     wants = [ "k3s.service" "network-online.target" ];
     path = [ pkgs.kubectl pkgs.bash pkgs.coreutils ];
@@ -287,26 +298,36 @@ in
       export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 
       if [[ ! -s "${homelabFluxAgeKeyFile}" ]]; then
-        echo "homelab-ensure-flux-sops-age: key file ${homelabFluxAgeKeyFile} is missing"
+        echo "homelab-ensure-flux-bootstrap: key file ${homelabFluxAgeKeyFile} is missing"
+        exit 0
+      fi
+
+      if [[ ! -s "${homelabFluxGitCredentialsFile}" ]]; then
+        echo "homelab-ensure-flux-bootstrap: credentials file ${homelabFluxGitCredentialsFile} is missing"
         exit 0
       fi
 
       if [[ ! -r "$KUBECONFIG" ]]; then
-        echo "homelab-ensure-flux-sops-age: kubeconfig is not readable yet"
+        echo "homelab-ensure-flux-bootstrap: kubeconfig is not readable yet"
         exit 0
       fi
 
       if ! kubectl --request-timeout=5s get namespace flux-system >/dev/null 2>&1; then
-        echo "homelab-ensure-flux-sops-age: flux-system namespace not present yet"
+        echo "homelab-ensure-flux-bootstrap: flux-system namespace not present yet"
         exit 0
       fi
 
       if ! kubectl --request-timeout=5s get crd \
         gitrepositories.source.toolkit.fluxcd.io \
         kustomizations.kustomize.toolkit.fluxcd.io >/dev/null 2>&1; then
-        echo "homelab-ensure-flux-sops-age: Flux CRDs are not present yet"
+        echo "homelab-ensure-flux-bootstrap: Flux CRDs are not present yet"
         exit 0
       fi
+
+      kubectl -n flux-system create secret generic flux-system-write \
+        --from-env-file="${homelabFluxGitCredentialsFile}" \
+        --dry-run=client -o yaml \
+        | kubectl apply -f -
 
       kubectl -n flux-system create secret generic sops-age \
         --from-file=age.agekey="${homelabFluxAgeKeyFile}" \
@@ -317,8 +338,8 @@ in
     '';
   };
 
-  systemd.timers.homelab-ensure-flux-sops-age = {
-    description = "Reconcile flux-system/sops-age secret";
+  systemd.timers.homelab-ensure-flux-bootstrap = {
+    description = "Reconcile Flux bootstrap credentials and sync resources";
     wantedBy = [ "timers.target" ];
     timerConfig = {
       OnBootSec = "2m";
