@@ -10,6 +10,7 @@ resources:
   - apps/worker/secrets.sops.yaml
   - apps/worker/manifest.yaml
   - apps/libsql/spinyourlife.yaml
+  - apps/spinyourlife/secrets.sops.yaml
   - apps/spinyourlife/manifest.yaml
   - apps/immich/postgres.yaml
   - apps/immich/repository.yaml
