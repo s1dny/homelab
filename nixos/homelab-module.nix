@@ -3,11 +3,11 @@
 let
   homelabSrc = ../.;
   homelabSourcePath = "/etc/homelab/source";
-  homelabBootstrapFlakePath = "/etc/nixos";
   homelabRuntimeSecretsDir = "/run/secrets/homelab";
   homelabCloudflaredSecretsFile = "${homelabRuntimeSecretsDir}/cloudflare-tunnel-token.env";
   homelabRusticProtonSecretsFile = "${homelabRuntimeSecretsDir}/rustic-proton.env";
-  homelabHostSecretsSopsFile = "${homelabSrc}/nixos/secrets/host-secrets.sops.yaml";
+  homelabFluxAgeKeyFile = "${homelabRuntimeSecretsDir}/flux-age-key.txt";
+  homelabHostSecretsSopsFile = ./secrets/host-secrets.sops.yaml;
   homelabSopsAgeKeyFile = "/var/lib/sops-nix/key.txt";
   fluxTransitionManifest = pkgs.fetchurl {
     url = "https://github.com/fluxcd/flux2/releases/download/v2.8.8/install.yaml";
@@ -101,14 +101,11 @@ in
 
   environment.systemPackages = with pkgs; [
     age
-    bun
-    cargo
     cloudflared
     curl
     docker-compose
     dua
     eza
-    gcc
     git
     jq
     k3s
@@ -116,13 +113,7 @@ in
     rustic
     kubectl
     kubernetes-helm
-    libclang
-    libxml2
     neovim
-    nodejs
-    pkg-config
-    python3
-    rustc
     sops
     sqld
     sqlite
@@ -153,20 +144,7 @@ in
       exec ${pkgs.bash}/bin/bash ${homelabSourcePath}/sync.sh "$@"
     '')
 
-    (writeShellScriptBin "homelab-sync-bootstrap" ''
-      set -euo pipefail
-      ${pkgs.coreutils}/bin/install -m 0644 \
-        ${homelabSourcePath}/nixos/flake.nix \
-        ${homelabBootstrapFlakePath}/flake.nix
-    '')
   ];
-
-  environment.variables = {
-    PKG_CONFIG_PATH = lib.makeSearchPath "lib/pkgconfig" [ pkgs.libxml2.dev ];
-    LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
-    BINDGEN_EXTRA_CLANG_ARGS =
-      builtins.readFile "${pkgs.stdenv.cc}/nix-support/libc-cflags";
-  };
 
   environment.sessionVariables = {
     KUBECONFIG = "/etc/rancher/k3s/k3s.yaml";
@@ -195,6 +173,16 @@ in
     owner = "root";
     group = "root";
     mode = "0400";
+  };
+  sops.secrets."homelab/flux-age-key.txt" = {
+    sopsFile = homelabHostSecretsSopsFile;
+    format = "yaml";
+    key = "flux_age_key";
+    path = homelabFluxAgeKeyFile;
+    owner = "root";
+    group = "root";
+    mode = "0400";
+    restartUnits = [ "homelab-ensure-flux-sops-age.service" ];
   };
   services.k3s = {
     enable = true;
@@ -285,41 +273,6 @@ in
     '';
   };
 
-  systemd.services.homelab-auto-upgrade = {
-    description = "Update flake inputs and rebuild the host";
-    after = [ "network-online.target" ];
-    wants = [ "network-online.target" ];
-    path = [ pkgs.nix pkgs.bash pkgs.coreutils ];
-    serviceConfig = {
-      Type = "oneshot";
-      User = "root";
-      WorkingDirectory = homelabBootstrapFlakePath;
-    };
-    script = ''
-      set -euo pipefail
-
-      if ! cmp -s \
-        ${homelabSourcePath}/nixos/flake.nix \
-        ${homelabBootstrapFlakePath}/flake.nix; then
-        install -m 0644 \
-          ${homelabSourcePath}/nixos/flake.nix \
-          ${homelabBootstrapFlakePath}/flake.nix
-      fi
-
-      nix flake update --flake ${homelabBootstrapFlakePath}
-      exec /run/current-system/sw/bin/nixos-rebuild switch --flake ${homelabBootstrapFlakePath}#${config.networking.hostName}
-    '';
-  };
-
-  systemd.timers.homelab-auto-upgrade = {
-    description = "Run automatic upgrades for the host";
-    wantedBy = [ "timers.target" ];
-    timerConfig = {
-      OnCalendar = "*-*-* 00:00:00";
-      Persistent = true;
-    };
-  };
-
   systemd.services.homelab-ensure-flux-sops-age = {
     description = "Ensure Flux sync and sops-age secret exist";
     after = [ "homelab-reconcile-flux.service" "k3s.service" "network-online.target" ];
@@ -333,8 +286,8 @@ in
       set -euo pipefail
       export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 
-      if [[ ! -s "${homelabSopsAgeKeyFile}" ]]; then
-        echo "homelab-ensure-flux-sops-age: key file ${homelabSopsAgeKeyFile} is missing"
+      if [[ ! -s "${homelabFluxAgeKeyFile}" ]]; then
+        echo "homelab-ensure-flux-sops-age: key file ${homelabFluxAgeKeyFile} is missing"
         exit 0
       fi
 
@@ -356,7 +309,7 @@ in
       fi
 
       kubectl -n flux-system create secret generic sops-age \
-        --from-file=age.agekey="${homelabSopsAgeKeyFile}" \
+        --from-file=age.agekey="${homelabFluxAgeKeyFile}" \
         --dry-run=client -o yaml \
         | kubectl apply -f -
 
@@ -403,8 +356,6 @@ in
     "d /srv/libsql/spinyourlife 0750 666 666 -"
     "d /srv/plarza-dashboard-deploy 0750 ${defaultHostUsername} users -"
     "d /srv/rustic/repository 0700 root root -"
-    "d /srv/plarza-deploy 0750 ${defaultHostUsername} users -"
-    "d /srv/plarza-worker-deploy 0750 ${defaultHostUsername} users -"
     "d /srv/registry 0755 root root -"
     "d /srv/spinyourlife-deploy 0750 ${defaultHostUsername} users -"
     "d /srv/tuwunel/data 0750 root root -"
@@ -430,105 +381,6 @@ in
         -p 127.0.0.1:5000:5000 \
         -v /srv/registry:/var/lib/registry \
         registry:latest
-    '';
-  };
-
-  systemd.services.plarza-auto-deploy = {
-    description = "Build and deploy Plarza from GitHub";
-    after = [
-      "docker.service"
-      "homelab-local-registry.service"
-      "k3s.service"
-      "network-online.target"
-    ];
-    wants = [
-      "docker.service"
-      "homelab-local-registry.service"
-      "k3s.service"
-      "network-online.target"
-    ];
-    path = [
-      pkgs.bash
-      pkgs.coreutils
-      dockerPackage
-      pkgs.git
-      pkgs.kubectl
-      pkgs.openssh
-      pkgs.util-linux
-    ];
-    serviceConfig = {
-      Type = "oneshot";
-      User = defaultHostUsername;
-      Group = "users";
-      SupplementaryGroups = [ "docker" "wheel" ];
-      WorkingDirectory = "/srv/plarza-deploy";
-      TimeoutStartSec = "15m";
-    };
-    script = ''
-      set -euo pipefail
-
-      export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
-
-      repo_url="git@github.com:plarza/app.git"
-      branch="main"
-      app_dir="/srv/plarza-deploy/repo"
-      state_file="/srv/plarza-deploy/deployed-rev"
-      lock_file="/srv/plarza-deploy/deploy.lock"
-      image="localhost:5000/plarza:latest"
-
-      exec 9>"$lock_file"
-      if ! flock -n 9; then
-        echo "plarza-auto-deploy: another deploy is already running"
-        exit 0
-      fi
-
-      if [[ ! -r "$KUBECONFIG" ]]; then
-        echo "plarza-auto-deploy: kubeconfig is not readable yet"
-        exit 0
-      fi
-
-      if [[ ! -d "$app_dir/.git" ]]; then
-        rm -rf "$app_dir"
-        git clone --branch "$branch" "$repo_url" "$app_dir"
-      fi
-
-      cd "$app_dir"
-      git fetch --prune origin "$branch"
-      target_rev="$(git rev-parse FETCH_HEAD)"
-      deployed_rev="$(cat "$state_file" 2>/dev/null || true)"
-
-      if [[ "$target_rev" == "$deployed_rev" ]]; then
-        echo "plarza-auto-deploy: already deployed $target_rev"
-        exit 0
-      fi
-
-      public_posthog_key="$(
-        kubectl -n plarza get secret plarza-app \
-          -o go-template='{{index .data "PUBLIC_POSTHOG_KEY" | base64decode}}'
-      )"
-      if [[ -z "$public_posthog_key" ]]; then
-        echo "plarza-auto-deploy: PUBLIC_POSTHOG_KEY is empty"
-        exit 1
-      fi
-
-      git checkout -B "$branch" "$target_rev"
-      docker build --no-cache \
-        --build-arg PUBLIC_POSTHOG_KEY="$public_posthog_key" \
-        --build-arg SOURCE_REV="$target_rev" \
-        -t "$image" .
-      docker push "$image"
-
-      kubectl -n plarza rollout restart deployment/plarza
-      kubectl -n plarza rollout status deployment/plarza --timeout=5m
-
-      running_rev="$(kubectl -n plarza exec deployment/plarza -c app -- cat /app/.source-rev)"
-      if [[ "$running_rev" != "$target_rev" ]]; then
-        echo "plarza-auto-deploy: running revision $running_rev does not match target $target_rev"
-        exit 1
-      fi
-
-      printf '%s\n' "$target_rev" > "$state_file"
-      echo "plarza-auto-deploy: deployed $target_rev"
     '';
   };
 
@@ -607,160 +459,6 @@ in
     wantedBy = [ "timers.target" ];
     timerConfig = {
       OnBootSec = "60s";
-      OnUnitActiveSec = "1m";
-      AccuracySec = "10s";
-      Persistent = false;
-    };
-  };
-
-  systemd.timers.plarza-auto-deploy = {
-    description = "Poll GitHub and deploy Plarza changes";
-    wantedBy = [ "timers.target" ];
-    timerConfig = {
-      OnBootSec = "45s";
-      OnUnitActiveSec = "1m";
-      AccuracySec = "10s";
-      Persistent = false;
-    };
-  };
-
-  systemd.services.plarza-worker-auto-deploy = {
-    description = "Build and deploy the Plarza worker from GitHub";
-    after = [
-      "docker.service"
-      "homelab-local-registry.service"
-      "k3s.service"
-      "network-online.target"
-    ];
-    wants = [
-      "docker.service"
-      "homelab-local-registry.service"
-      "k3s.service"
-      "network-online.target"
-    ];
-    path = [
-      pkgs.bash
-      pkgs.coreutils
-      pkgs.curl
-      dockerPackage
-      pkgs.git
-      pkgs.jq
-      pkgs.kubectl
-      pkgs.openssh
-      pkgs.util-linux
-    ];
-    serviceConfig = {
-      Type = "oneshot";
-      User = defaultHostUsername;
-      Group = "users";
-      SupplementaryGroups = [ "docker" "wheel" ];
-      WorkingDirectory = "/srv/plarza-worker-deploy";
-      TimeoutStartSec = "30m";
-    };
-    script = ''
-      set -euo pipefail
-
-      export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
-
-      repo_url="git@github.com:plarza/worker.git"
-      branch="main"
-      app_dir="/srv/plarza-worker-deploy/repo"
-      state_file="/srv/plarza-worker-deploy/deployed-rev"
-      lock_file="/srv/plarza-worker-deploy/deploy.lock"
-      image="localhost:5000/plarza-worker:latest"
-
-      exec 9>"$lock_file"
-      if ! flock -n 9; then
-        echo "plarza-worker-auto-deploy: another deploy is already running"
-        exit 0
-      fi
-
-      if [[ ! -r "$KUBECONFIG" ]]; then
-        echo "plarza-worker-auto-deploy: kubeconfig is not readable yet"
-        exit 0
-      fi
-
-      if ! kubectl -n plarza get deployment plarza-worker >/dev/null 2>&1; then
-        echo "plarza-worker-auto-deploy: deployment is not available yet"
-        exit 0
-      fi
-
-      if ! kubectl -n plarza get secret plarza-worker >/dev/null 2>&1; then
-        echo "plarza-worker-auto-deploy: worker secret is not available yet"
-        exit 0
-      fi
-
-      if [[ ! -d "$app_dir/.git" ]]; then
-        rm -rf "$app_dir"
-        git clone --branch "$branch" "$repo_url" "$app_dir"
-      fi
-
-      cd "$app_dir"
-      git fetch --prune origin "$branch"
-      target_rev="$(git rev-parse FETCH_HEAD)"
-      deployed_rev="$(cat "$state_file" 2>/dev/null || true)"
-
-      if [[ "$target_rev" == "$deployed_rev" ]]; then
-        echo "plarza-worker-auto-deploy: already deployed $target_rev"
-        exit 0
-      fi
-
-      api_key="$(kubectl -n plarza get secret plarza-worker -o jsonpath='{.data.API_KEY}' | base64 --decode)"
-      if ! tasks_json="$(curl --fail --silent --show-error --max-time 10 \
-        -H "Authorization: Bearer $api_key" \
-        https://worker.aza.network/tasks)"; then
-        echo "plarza-worker-auto-deploy: unable to verify active tasks; deferring deploy"
-        exit 0
-      fi
-      if ! active_tasks="$(jq -er '.count | numbers' <<<"$tasks_json")"; then
-        echo "plarza-worker-auto-deploy: invalid task response; deferring deploy"
-        exit 0
-      fi
-      if (( active_tasks > 0 )); then
-        echo "plarza-worker-auto-deploy: deferring $target_rev while $active_tasks task(s) are active"
-        exit 0
-      fi
-
-      git checkout -B "$branch" "$target_rev"
-      docker build --no-cache \
-        --build-arg SOURCE_REV="$target_rev" \
-        -t "$image" .
-      docker push "$image"
-
-      # Pull the mutable local-registry image by replacing the pod directly.
-      # This leaves the Flux-owned Deployment template untouched, avoiding a
-      # second reconciliation restart several minutes after each deploy.
-      running_pod="$(kubectl -n plarza get pods \
-        -l app=plarza-worker \
-        --field-selector=status.phase=Running \
-        -o name | head -n 1)"
-      if [[ -z "$running_pod" ]]; then
-        echo "plarza-worker-auto-deploy: no running worker pod found"
-        exit 1
-      fi
-      kubectl -n plarza delete "$running_pod" --wait=true
-      kubectl -n plarza rollout status deployment/plarza-worker --timeout=10m
-
-      running_rev="$(kubectl -n plarza exec deployment/plarza-worker -- cat /app/.source-rev)"
-      if [[ "$running_rev" != "$target_rev" ]]; then
-        echo "plarza-worker-auto-deploy: running revision $running_rev does not match target $target_rev"
-        exit 1
-      fi
-
-      # Remove the legacy Compose container only after Kubernetes is serving the
-      # verified revision. This is idempotent on subsequent deployments.
-      docker rm -f worker >/dev/null 2>&1 || true
-
-      printf '%s\n' "$target_rev" > "$state_file"
-      echo "plarza-worker-auto-deploy: deployed $target_rev"
-    '';
-  };
-
-  systemd.timers.plarza-worker-auto-deploy = {
-    description = "Poll GitHub and deploy Plarza worker changes";
-    wantedBy = [ "timers.target" ];
-    timerConfig = {
-      OnBootSec = "75s";
       OnUnitActiveSec = "1m";
       AccuracySec = "10s";
       Persistent = false;
@@ -932,32 +630,38 @@ in
     };
   };
 
+  systemd.services.rustic-restore-smoke-test = {
+    description = "Verify and restore from the offsite Rustic repository";
+    after = [ "network-online.target" ];
+    wants = [ "network-online.target" ];
+    path = [ pkgs.rustic pkgs.rclone pkgs.coreutils pkgs.util-linux pkgs.bash ];
+    serviceConfig = {
+      Type = "oneshot";
+      User = "root";
+      EnvironmentFile = homelabRusticProtonSecretsFile;
+      ExecStart = "${pkgs.bash}/bin/bash ${homelabSourcePath}/scripts/rustic-restore-smoke-test.sh";
+      TimeoutStartSec = "12h";
+      Nice = 10;
+      IOSchedulingClass = "idle";
+    };
+  };
+
+  systemd.timers.rustic-restore-smoke-test = {
+    description = "Verify an offsite Rustic restore every week";
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnCalendar = "Sun *-*-* 04:30:00";
+      Persistent = true;
+      RandomizedDelaySec = "30m";
+    };
+  };
+
   users.users.${defaultHostUsername} = {
     isNormalUser = true;
     extraGroups = [ "wheel" "networkmanager" "docker" ];
     shell = pkgs.fish;
     openssh.authorizedKeys.keys = defaultHostAuthorizedKeys;
   };
-
-  security.sudo.extraRules = [
-    {
-      users = [ defaultHostUsername ];
-      commands = [
-        {
-          command = "/run/current-system/sw/bin/nix";
-          options = [ "NOPASSWD" ];
-        }
-        {
-          command = "/run/current-system/sw/bin/nixos-rebuild";
-          options = [ "NOPASSWD" ];
-        }
-        {
-          command = "/run/current-system/sw/bin/homelab-sync-bootstrap";
-          options = [ "NOPASSWD" ];
-        }
-      ];
-    }
-  ];
 
   nixpkgs.config.allowUnfree = true;
   nix.settings.experimental-features = [ "nix-command" "flakes" ];

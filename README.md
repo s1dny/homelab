@@ -4,30 +4,20 @@ Personal homelab configuration for a Dell Optiplex 7060 (`azalab-0`) running Nix
 Defaults are hardcoded to my setup (domain, hostnames, SSH keys, etc.). If you want to change the defaults, fork the repo and edit them there.
 
 ## Deployment workflow
-Hosts update all flake inputs and rebuild automatically every night. Nixpkgs follows the
-version declared by the homelab flake, so operating-system release upgrades are picked up
-without maintaining a second version pin in `/etc/nixos`.
+The repository root is the deployable, locked NixOS flake. Host upgrades happen only
+when `flake.lock` changes in review, and `deploy-rs` activates that exact closure with
+automatic connectivity rollback. Kubernetes workloads are reconciled separately by Flux.
 
-To apply changes immediately:
+Validate and deploy the host from a trusted workstation:
 
 ```bash
-cd /etc/nixos
-sudo nix flake update homelab
-sudo nixos-rebuild switch --flake /etc/nixos#$(hostname -s)
-```
-or
-```bash
-sync.sh
+nix flake check
+nix run github:serokell/deploy-rs -- .#azalab-0
 ```
 
-`sync.sh` first rebuilds the current homelab module, synchronizes the small bootstrap flake
-when it changed, and then performs a second rebuild only when required. It uses passwordless
-sudo for the exact commands involved. After changing those sudoers rules, run the rebuild
-once with normal sudo; subsequent `sync.sh` runs should not prompt.
-
-When introducing bootstrap synchronization on a host installed from an older revision of this
-repository, run `sync.sh` twice. The first run installs the helper and the second updates the
-bootstrap flake to the shared Nixpkgs input.
+`sync.sh` remains available on the host as a break-glass/manual activation path. It
+reapplies the exact source embedded in the running NixOS closure and never updates inputs.
+Normal changes should be activated from a reviewed checkout with deploy-rs.
 
 ## Prerequisites
 - Domain in Cloudflare: `aza.network`
@@ -85,14 +75,16 @@ bootstrap flake to the shared Nixpkgs input.
    sudo nixos-rebuild switch --flake /etc/nixos#$(hostname -s)
    ```
 
-7. From your local machine, install the same key for `sops edit` (one-time):
+7. From your local machine, install the host key for `sops edit` (one-time):
    ```bash
    mkdir -p ~/.config/sops/age
    ssh aiden@azalab-0 'sudo cat /var/lib/sops-nix/key.txt' > ~/.config/sops/age/keys.txt
    chmod 600 ~/.config/sops/age/keys.txt
    ```
 
-8. Edit encrypted secrets, then commit/push:
+8. Edit encrypted secrets, then commit/push. Kubernetes secrets use a separate age
+   recipient; its private identity is stored as `flux_age_key` inside the host secret file
+   and is materialized only for Flux at runtime:
    ```bash
    # install once (pick one)
    # macOS: brew install sops age
@@ -112,12 +104,20 @@ In Cloudflare Zero Trust dashboard, create a tunnel named the same as your clust
 - `matrix.aza.network` -> `http://localhost:80`
 - `spinyour.life` -> `http://localhost:80`
 
-Set `CLOUDFLARE_TUNNEL_TOKEN` in `nixos/secrets/host-secrets.sops.yaml` (`cloudflare_tunnel_token_env`) and rebuild. `cloudflared` itself is supplied by `pkgs.cloudflared`, so newer packaged releases are picked up automatically by the host upgrade timer.
+Set `CLOUDFLARE_TUNNEL_TOKEN` in `nixos/secrets/host-secrets.sops.yaml`
+(`cloudflare_tunnel_token_env`) and deploy a reviewed flake-lock update when upgrading
+`cloudflared`.
 
 ## Flux Bootstrap
-NixOS writes the Flux install manifest through `services.k3s.manifests`. K3s applies it automatically from `/var/lib/rancher/k3s/server/manifests`.
+NixOS owns the pinned Flux 2.9.2 controller manifests through `services.k3s.manifests`.
+Flux installs the Flux Operator for its internal status UI. Operator 0.50.0's published
+distribution currently supports Flux 2.8.x, so it deliberately does not take over the
+newer controllers or repository sync. Reconciliation is ordered
+`infrastructure` -> `platform` -> `apps`.
 
-The only runtime bridge is `homelab-ensure-flux-sops-age.service`, which copies `/var/lib/sops-nix/key.txt` into `flux-system/sops-age` and applies `flux-system-sync.yaml` after the Flux CRDs exist.
+The only runtime secret bridge is `homelab-ensure-flux-sops-age.service`. It materializes
+the dedicated Flux identity from the host-encrypted secret file into
+`flux-system/sops-age`. It never copies the host's own SOPS identity into Kubernetes.
 
 Check it with:
 ```bash
@@ -137,7 +137,9 @@ using the public libSQL endpoint outside the cluster.
 
 `rustic-host-backup.timer` creates a nightly encrypted local repository at
 `/srv/rustic/repository`, applies retention, then mirrors the repository to
-`azalab-0/rustic` in Proton Drive with rclone.
+`azalab-0/rustic` in Proton Drive with rclone and verifies the mirror. A weekly
+`rustic-restore-smoke-test.timer` checks remote repository data and performs a temporary
+restore of `/etc/nixos`.
 
 Add `rustic_proton_env` to `nixos/secrets/host-secrets.sops.yaml` with:
 
@@ -152,8 +154,9 @@ Run and inspect it manually with:
 
 ```bash
 sudo systemctl start rustic-host-backup.service
+sudo systemctl start rustic-restore-smoke-test.service
 sudo systemctl status rustic-host-backup.service
-sudo journalctl -u rustic-host-backup.service
+sudo journalctl -u rustic-host-backup.service -u rustic-restore-smoke-test.service
 ```
 
 ## Verification
@@ -165,10 +168,14 @@ homelab-check-k8s-health
 Verify Flux and workloads are healthy:
 ```bash
 kubectl -n flux-system get gitrepository flux-system
-kubectl -n flux-system get kustomization flux-system infrastructure apps
+kubectl -n flux-system get kustomization flux-system infrastructure platform apps
 kubectl -n flux-system get helmreleases -A
+kubectl -n flux-system get imagerepository,imagepolicy,imageupdateautomation
 kubectl get pods -A
 ```
+
+See [Plarza delivery and operations](docs/plarza-delivery.md) for the immutable-image
+pipeline, migration order, rollout behavior, rollback, and the internal Flux UI.
 
 ## Samba File Share
 Samba is enabled by the homelab module with:

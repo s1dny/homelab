@@ -1,0 +1,92 @@
+apiVersion: image.toolkit.fluxcd.io/v1
+kind: ImageRepository
+metadata:
+  name: plarza-app
+  namespace: flux-system
+spec:
+  image: ghcr.io/plarza/app
+  interval: 5m0s
+  provider: generic
+  exclusionList:
+    - ^.*\.sig$
+---
+apiVersion: image.toolkit.fluxcd.io/v1
+kind: ImagePolicy
+metadata:
+  name: plarza-app
+  namespace: flux-system
+  labels:
+    delivery.plarza.com/automation: production
+spec:
+  imageRepositoryRef:
+    name: plarza-app
+  filterTags:
+    pattern: ^main-[a-f0-9]{12}-(?P<run>[1-9][0-9]*)$
+    extract: $run
+  policy:
+    numerical:
+      order: asc
+  digestReflectionPolicy: IfNotPresent
+---
+apiVersion: image.toolkit.fluxcd.io/v1
+kind: ImageRepository
+metadata:
+  name: plarza-worker
+  namespace: flux-system
+spec:
+  image: ghcr.io/plarza/worker
+  interval: 5m0s
+  provider: generic
+  exclusionList:
+    - ^.*\.sig$
+---
+apiVersion: image.toolkit.fluxcd.io/v1
+kind: ImagePolicy
+metadata:
+  name: plarza-worker
+  namespace: flux-system
+  labels:
+    delivery.plarza.com/automation: production
+spec:
+  imageRepositoryRef:
+    name: plarza-worker
+  filterTags:
+    pattern: ^main-[a-f0-9]{12}-(?P<run>[1-9][0-9]*)$
+    extract: $run
+  policy:
+    numerical:
+      order: asc
+  digestReflectionPolicy: IfNotPresent
+---
+apiVersion: image.toolkit.fluxcd.io/v1
+kind: ImageUpdateAutomation
+metadata:
+  name: plarza-production
+  namespace: flux-system
+spec:
+  interval: 5m0s
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  policySelector:
+    matchLabels:
+      delivery.plarza.com/automation: production
+  git:
+    checkout:
+      ref:
+        branch: main
+    commit:
+      author:
+        name: flux
+        email: flux@aza.network
+      messageTemplate: |-
+        Deploy Plarza images
+
+        {{ range .Changed.Changes -}}
+        - {{ .OldValue }} -> {{ .NewValue }}
+        {{ end -}}
+    push:
+      branch: main
+  update:
+    strategy: Setters
+    path: ./flux/clusters/azalab-0/manifests/apps

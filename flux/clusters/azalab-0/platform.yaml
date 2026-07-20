@@ -1,17 +1,13 @@
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
-  name: apps
+  name: platform
   namespace: flux-system
 spec:
   dependsOn:
-    - name: platform
-  decryption:
-    provider: sops
-    secretRef:
-      name: sops-age
+    - name: infrastructure
   interval: 10m0s
-  path: ./flux/clusters/azalab-0/manifests
+  path: ./flux/clusters/azalab-0/manifests/cluster
   prune: true
   sourceRef:
     kind: GitRepository

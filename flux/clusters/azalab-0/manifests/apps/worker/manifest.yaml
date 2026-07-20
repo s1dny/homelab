@@ -5,17 +5,22 @@ metadata:
   namespace: plarza
 spec:
   replicas: 1
+  revisionHistoryLimit: 5
+  progressDeadlineSeconds: 600
   selector:
     matchLabels:
       app: plarza-worker
   strategy:
-    type: Recreate
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   template:
     metadata:
       labels:
         app: plarza-worker
     spec:
-      terminationGracePeriodSeconds: 30
+      terminationGracePeriodSeconds: 86400
       securityContext:
         runAsGroup: 10001
         runAsUser: 10001
@@ -23,8 +28,8 @@ spec:
           type: RuntimeDefault
       containers:
         - name: worker
-          image: localhost:5000/plarza-worker:latest
-          imagePullPolicy: Always
+          image: localhost:5000/plarza-worker:latest # {"$imagepolicy": "flux-system:plarza-worker"}
+          imagePullPolicy: IfNotPresent
           env:
             - name: API_KEY
               valueFrom:
@@ -49,20 +54,27 @@ spec:
           ports:
             - name: http
               containerPort: 3009
-              hostPort: 3009
           readinessProbe:
-            tcpSocket:
+            httpGet:
+              path: /health/ready
               port: http
-            initialDelaySeconds: 5
-            periodSeconds: 5
+            periodSeconds: 2
             timeoutSeconds: 3
-            failureThreshold: 6
+            failureThreshold: 2
           livenessProbe:
-            tcpSocket:
+            httpGet:
+              path: /health/live
               port: http
             initialDelaySeconds: 20
             periodSeconds: 15
             timeoutSeconds: 3
+          startupProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 60
           resources:
             requests:
               cpu: "1"

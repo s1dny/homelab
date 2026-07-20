@@ -22,8 +22,8 @@ spec:
           type: RuntimeDefault
       initContainers:
         - name: clear-stale-replication-snapshots
-          image: ghcr.io/tursodatabase/libsql-server:latest
-          imagePullPolicy: Always
+          image: ghcr.io/tursodatabase/libsql-server:latest@sha256:07d5da358f37f7f327cc33c1cb5278e7892e04225f011a65a76049372a308982
+          imagePullPolicy: IfNotPresent
           command:
             - /bin/sh
             - -ec
@@ -41,8 +41,8 @@ spec:
               mountPath: /var/lib/sqld
       containers:
         - name: libsql
-          image: ghcr.io/tursodatabase/libsql-server:latest
-          imagePullPolicy: Always
+          image: ghcr.io/tursodatabase/libsql-server:latest@sha256:07d5da358f37f7f327cc33c1cb5278e7892e04225f011a65a76049372a308982
+          imagePullPolicy: IfNotPresent
           env:
             - name: SQLD_NODE
               value: primary
@@ -112,6 +112,8 @@ metadata:
   namespace: plarza
 spec:
   replicas: 1
+  revisionHistoryLimit: 5
+  progressDeadlineSeconds: 600
   selector:
     matchLabels:
       app: plarza
@@ -133,8 +135,8 @@ spec:
           type: RuntimeDefault
       initContainers:
         - name: migrate
-          image: localhost:5000/plarza:latest
-          imagePullPolicy: Always
+          image: localhost:5000/plarza:latest # {"$imagepolicy": "flux-system:plarza-app"}
+          imagePullPolicy: IfNotPresent
           command:
             - bun
             - database/scripts/migrate.ts
@@ -149,8 +151,8 @@ spec:
             runAsNonRoot: true
       containers:
         - name: app
-          image: localhost:5000/plarza:latest
-          imagePullPolicy: Always
+          image: localhost:5000/plarza:latest # {"$imagepolicy": "flux-system:plarza-app"}
+          imagePullPolicy: IfNotPresent
           env:
             - name: NODE_ENV
               value: production

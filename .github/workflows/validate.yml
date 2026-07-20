@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: infrastructure-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check NixOS and deploy-rs configuration
+        run: nix flake check --print-build-logs
+
+      - name: Render and validate Kubernetes resources
+        run: |
+          # Variables expand inside the inner Bash process.
+          # shellcheck disable=SC2016
+          nix develop -c bash -euo pipefail -c '
+            for directory in \
+              flux/clusters/azalab-0 \
+              flux/clusters/azalab-0/manifests/infrastructure \
+              flux/clusters/azalab-0/manifests/cluster \
+              flux/clusters/azalab-0/manifests
+            do
+              kustomize build "$directory" |
+                kubeconform -strict -summary -ignore-missing-schemas
+            done
+          '
+
+      - name: Check shell scripts
+        run: |
+          nix develop -c shellcheck \
+            scripts/*.sh \
+            sync.sh
+
+      - name: Check GitHub Actions workflows
+        run: nix develop -c actionlint

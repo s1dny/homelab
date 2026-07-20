@@ -39,3 +39,15 @@ rclone sync \
   --low-level-retries 20 \
   --protondrive-replace-existing-draft \
   --protondrive-enable-caching=false
+
+# Proton Drive does not expose useful object hashes, so compare the complete
+# repository inventory and object sizes after every mirror.
+rclone check \
+  "${RUSTIC_REPOSITORY}" \
+  ":protondrive:${PROTON_PATH}" \
+  --size-only \
+  --one-way \
+  --checkers 2 \
+  --retries 8 \
+  --low-level-retries 20 \
+  --protondrive-enable-caching=false
