@@ -118,10 +118,7 @@ spec:
     matchLabels:
       app: plarza
   strategy:
-    rollingUpdate:
-      maxSurge: 1
-      maxUnavailable: 0
-    type: RollingUpdate
+    type: Recreate
   template:
     metadata:
       labels:
@@ -168,6 +165,11 @@ spec:
               value: "30"
             - name: TMPDIR
               value: /tmp
+            - name: EXPLORE_CAPTURE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: plarza-worker
+                  key: EXPLORE_CAPTURE_TOKEN
           envFrom:
             - secretRef:
                 name: plarza-app

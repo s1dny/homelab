@@ -27,7 +27,8 @@ spec:
         runAsGroup: 10001
         runAsUser: 10001
         seccompProfile:
-          type: RuntimeDefault
+          type: Localhost
+          localhostProfile: chromium.json
       containers:
         - name: worker
           image: ghcr.io/plarza/worker:main-5f7266c911e9-8@sha256:dc4816181195263ace2326a978e7fabcb225bb2128603e8dec722eaf9a382e94 # {"$imagepolicy": "flux-system:plarza-worker"}
@@ -53,6 +54,17 @@ spec:
                 secretKeyRef:
                   name: plarza-app
                   key: DATABASE_URL
+            - name: EXPLORE_CAPTURE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: plarza-worker
+                  key: EXPLORE_CAPTURE_TOKEN
+            - name: PLARZA_INTERNAL_URL
+              value: http://plarza.plarza.svc.cluster.local:3000
+            - name: PLARZA_PUBLIC_ORIGIN
+              value: https://plarza.com
+            - name: CAPTURE_SERVICE_URL
+              value: http://plarza-capture.plarza.svc.cluster.local:3010
           ports:
             - name: http
               containerPort: 3009
@@ -89,6 +101,8 @@ spec:
             capabilities:
               drop:
                 - ALL
+              add:
+                - SYS_CHROOT
             readOnlyRootFilesystem: true
             runAsNonRoot: true
           volumeMounts:
@@ -111,6 +125,158 @@ spec:
     - name: http
       port: 3009
       targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: plarza-capture
+  namespace: plarza
+spec:
+  replicas: 1
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app: plarza-capture
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: plarza-capture
+    spec:
+      imagePullSecrets:
+        - name: plarza-ghcr
+      securityContext:
+        runAsGroup: 10001
+        runAsUser: 10001
+        seccompProfile:
+          type: Localhost
+          localhostProfile: chromium.json
+      containers:
+        - name: capture
+          image: ghcr.io/plarza/worker:main-4d938e5b1316-5@sha256:36401344446f467f260b42a3d189377d38481a992dc64d45e478fa51e0514b8d # {"$imagepolicy": "flux-system:plarza-worker"}
+          imagePullPolicy: IfNotPresent
+          command:
+            - /usr/bin/tini
+            - --
+            - /app/capture
+          env:
+            - name: EXPLORE_CAPTURE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: plarza-worker
+                  key: EXPLORE_CAPTURE_TOKEN
+          ports:
+            - name: http
+              containerPort: 3010
+          startupProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            periodSeconds: 2
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: 500m
+              memory: 512Mi
+            limits:
+              cpu: "4"
+              memory: 4Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - SYS_CHROOT
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: plarza-capture
+  namespace: plarza
+spec:
+  selector:
+    app: plarza-capture
+  ports:
+    - name: http
+      port: 3010
+      targetPort: http
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: plarza-capture
+  namespace: plarza
+spec:
+  podSelector:
+    matchLabels:
+      app: plarza-capture
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: plarza-worker
+      ports:
+        - protocol: TCP
+          port: 3010
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 100.64.0.0/10
+              - 127.0.0.0/8
+              - 169.254.0.0/16
+              - 172.16.0.0/12
+              - 192.0.0.0/24
+              - 192.0.2.0/24
+              - 192.168.0.0/16
+              - 198.18.0.0/15
+              - 198.51.100.0/24
+              - 203.0.113.0/24
+              - 224.0.0.0/4
+              - 240.0.0.0/4
+      ports:
+        - protocol: TCP
+          port: 80
+        - protocol: TCP
+          port: 443
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress

@@ -15,8 +15,8 @@ spec:
     spec:
       initContainers:
         - name: clear-stale-replication-snapshots
-          image: ghcr.io/tursodatabase/libsql-server:latest
-          imagePullPolicy: Always
+          image: ghcr.io/tursodatabase/libsql-server@sha256:07d5da358f37f7f327cc33c1cb5278e7892e04225f011a65a76049372a308982
+          imagePullPolicy: IfNotPresent
           command:
             - /bin/sh
             - -ec
@@ -34,8 +34,8 @@ spec:
               mountPath: /var/lib/sqld
       containers:
         - name: libsql
-          image: ghcr.io/tursodatabase/libsql-server:latest
-          imagePullPolicy: Always
+          image: ghcr.io/tursodatabase/libsql-server@sha256:07d5da358f37f7f327cc33c1cb5278e7892e04225f011a65a76049372a308982
+          imagePullPolicy: IfNotPresent
           env:
             - name: SQLD_NODE
               value: primary

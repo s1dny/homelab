@@ -38,16 +38,18 @@ spec:
               containerPort: 3000
           livenessProbe:
             httpGet:
-              path: /api/billing/products
+              path: /api/health/live
               port: 3000
             initialDelaySeconds: 30
             periodSeconds: 15
           readinessProbe:
             httpGet:
-              path: /api/billing/products
+              path: /api/health/ready
               port: 3000
-            initialDelaySeconds: 10
-            periodSeconds: 10
+            initialDelaySeconds: 5
+            periodSeconds: 60
+            timeoutSeconds: 30
+            failureThreshold: 1
           resources:
             requests:
               cpu: 100m

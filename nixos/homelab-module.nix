@@ -18,6 +18,10 @@ let
     url = "https://github.com/fluxcd/flux2/releases/download/v2.9.2/install.yaml";
     hash = "sha256-Sl87fH08AlzmMFwvqD46OQacfaq8QEqw5nKW+hcwWxg=";
   };
+  chromiumSeccompProfile = pkgs.fetchurl {
+    url = "https://raw.githubusercontent.com/microsoft/playwright/3827650d171cc1b035cbefb7e00bf5948d6809df/utils/docker/seccomp_profile.json";
+    hash = "sha256-zD5hyr2mu8HlPlTSe6TVWp076Cm23RpZb0p7MbHMeEk=";
+  };
   defaultHostHostname = "azalab-0";
   defaultHostUsername = "aiden";
   dockerPackage = pkgs.docker_29;
@@ -355,6 +359,8 @@ in
     "d /var/lib/homelab 0755 root root -"
     "d /var/lib/homelab/generated 0750 root wheel -"
     "d /var/lib/homelab/generated/k8s 0750 root wheel -"
+    "d /var/lib/kubelet/seccomp 0755 root root -"
+    "L+ /var/lib/kubelet/seccomp/chromium.json - - - - ${chromiumSeccompProfile}"
     "d /srv 0775 root users -"
     "d /srv/immich 0775 ${defaultHostUsername} users -"
     "d /srv/immich/library 2775 ${defaultHostUsername} users -"
