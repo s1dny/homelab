@@ -154,7 +154,7 @@ spec:
           localhostProfile: chromium.json
       containers:
         - name: capture
-          image: ghcr.io/plarza/worker:main-4d938e5b1316-5@sha256:36401344446f467f260b42a3d189377d38481a992dc64d45e478fa51e0514b8d # {"$imagepolicy": "flux-system:plarza-worker"}
+          image: ghcr.io/plarza/worker:main-5f7266c911e9-8@sha256:dc4816181195263ace2326a978e7fabcb225bb2128603e8dec722eaf9a382e94 # {"$imagepolicy": "flux-system:plarza-worker"}
           imagePullPolicy: IfNotPresent
           command:
             - /usr/bin/tini
