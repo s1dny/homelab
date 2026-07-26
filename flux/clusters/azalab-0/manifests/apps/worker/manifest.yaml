@@ -31,7 +31,7 @@ spec:
           localhostProfile: chromium.json
       containers:
         - name: worker
-          image: ghcr.io/plarza/worker:main-b03be16996c5-11@sha256:8053112ca0c08799c45bfe827657f6c99e6fa202216a0dade38d17cb52569396 # {"$imagepolicy": "flux-system:plarza-worker"}
+          image: ghcr.io/plarza/worker:main-b53e13abda58-12@sha256:f8bef430964f17b2ccd1aa6ce854ac011332989a0a4de9aca210f976196c3c82 # {"$imagepolicy": "flux-system:plarza-worker"}
           imagePullPolicy: IfNotPresent
           env:
             - name: API_KEY
@@ -154,7 +154,7 @@ spec:
           localhostProfile: chromium.json
       containers:
         - name: capture
-          image: ghcr.io/plarza/worker:main-b03be16996c5-11@sha256:8053112ca0c08799c45bfe827657f6c99e6fa202216a0dade38d17cb52569396 # {"$imagepolicy": "flux-system:plarza-worker"}
+          image: ghcr.io/plarza/worker:main-b53e13abda58-12@sha256:f8bef430964f17b2ccd1aa6ce854ac011332989a0a4de9aca210f976196c3c82 # {"$imagepolicy": "flux-system:plarza-worker"}
           imagePullPolicy: IfNotPresent
           command:
             - /usr/bin/tini
