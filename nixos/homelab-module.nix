@@ -27,6 +27,7 @@ let
   dockerPackage = pkgs.docker_29;
   defaultHostAuthorizedKeys = [
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGNLDRhkSlst/ch4vyH8gm3bh79BRB4MIdLiB/jrT5w6 aiden@plarza.com"
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPz2x+U0zKQXfaIVummROlUunU5l0DIJiHdF2KQrqrIY aiden@plarza.com"
   ];
 in
 {
