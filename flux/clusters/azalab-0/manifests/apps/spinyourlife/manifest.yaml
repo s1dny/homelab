@@ -18,7 +18,7 @@ spec:
         - name: spinyourlife-ghcr
       initContainers:
         - name: migrate
-          image: ghcr.io/s1dny/spinyourlife:main-3.3.0-a67ce33736c062269138e3c29e9020cdb478e658@sha256:eebd3360a9f0dcb95447590ccc8b71ac84a91f108cb1e68196ad6aa50c95b57d # {"$imagepolicy": "flux-system:spinyourlife"}
+          image: ghcr.io/s1dny/spinyourlife:main-4.1.0-13190ecacb267b42e878e9f3eae084422ec5db68@sha256:02b15a9a6b90cefcb538a6266caa09a70f716da37585f07f344f7b8939ce593c # {"$imagepolicy": "flux-system:spinyourlife"}
           imagePullPolicy: Always
           command: ["./spinyourlife-migrate"]
           env:
@@ -33,7 +33,7 @@ spec:
               memory: 512Mi
       containers:
         - name: spinyourlife
-          image: ghcr.io/s1dny/spinyourlife:main-3.3.0-a67ce33736c062269138e3c29e9020cdb478e658@sha256:eebd3360a9f0dcb95447590ccc8b71ac84a91f108cb1e68196ad6aa50c95b57d # {"$imagepolicy": "flux-system:spinyourlife"}
+          image: ghcr.io/s1dny/spinyourlife:main-4.1.0-13190ecacb267b42e878e9f3eae084422ec5db68@sha256:02b15a9a6b90cefcb538a6266caa09a70f716da37585f07f344f7b8939ce593c # {"$imagepolicy": "flux-system:spinyourlife"}
           imagePullPolicy: Always
           env:
             - name: LIBSQL_URL
