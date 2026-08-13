@@ -14,9 +14,11 @@ spec:
       labels:
         app: spinyourlife
     spec:
+      imagePullSecrets:
+        - name: spinyourlife-ghcr
       initContainers:
         - name: migrate
-          image: localhost:5000/spinyourlife:latest
+          image: localhost:5000/spinyourlife:latest # {"$imagepolicy": "flux-system:spinyourlife"}
           imagePullPolicy: Always
           command: ["./spinyourlife-migrate"]
           env:
@@ -31,7 +33,7 @@ spec:
               memory: 512Mi
       containers:
         - name: spinyourlife
-          image: localhost:5000/spinyourlife:latest
+          image: localhost:5000/spinyourlife:latest # {"$imagepolicy": "flux-system:spinyourlife"}
           imagePullPolicy: Always
           env:
             - name: LIBSQL_URL

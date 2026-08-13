@@ -33,6 +33,38 @@ spec:
 apiVersion: image.toolkit.fluxcd.io/v1
 kind: ImageRepository
 metadata:
+  name: spinyourlife
+  namespace: flux-system
+spec:
+  image: ghcr.io/s1dny/spinyourlife
+  interval: 1m0s
+  provider: generic
+  secretRef:
+    name: plarza-ghcr
+  exclusionList:
+    - ^.*\.sig$
+---
+apiVersion: image.toolkit.fluxcd.io/v1
+kind: ImagePolicy
+metadata:
+  name: spinyourlife
+  namespace: flux-system
+  labels:
+    delivery.spinyour.life/automation: production
+spec:
+  imageRepositoryRef:
+    name: spinyourlife
+  filterTags:
+    pattern: ^main-(?P<version>[1-9][0-9]*\.[1-9][0-9]*\.0)-[a-f0-9]{40}$
+    extract: $version
+  policy:
+    semver:
+      range: ">=0.0.0"
+  digestReflectionPolicy: IfNotPresent
+---
+apiVersion: image.toolkit.fluxcd.io/v1
+kind: ImageRepository
+metadata:
   name: plarza-worker
   namespace: flux-system
 spec:
@@ -94,3 +126,36 @@ spec:
   update:
     strategy: Setters
     path: ./flux/clusters/azalab-0/manifests/apps
+---
+apiVersion: image.toolkit.fluxcd.io/v1
+kind: ImageUpdateAutomation
+metadata:
+  name: spinyourlife-production
+  namespace: flux-system
+spec:
+  interval: 1m0s
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  policySelector:
+    matchLabels:
+      delivery.spinyour.life/automation: production
+  git:
+    checkout:
+      ref:
+        branch: main
+    commit:
+      author:
+        name: flux
+        email: flux@aza.network
+      messageTemplate: |-
+        Deploy Spin Your Life image
+
+        {{ range .Changed.Changes -}}
+        - {{ .OldValue }} -> {{ .NewValue }}
+        {{ end -}}
+    push:
+      branch: main
+  update:
+    strategy: Setters
+    path: ./flux/clusters/azalab-0/manifests/apps/spinyourlife
