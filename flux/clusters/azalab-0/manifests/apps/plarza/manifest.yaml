@@ -134,7 +134,7 @@ spec:
           type: RuntimeDefault
       initContainers:
         - name: migrate
-          image: ghcr.io/plarza/app:main-d838ac40c95e-11@sha256:ceae2dc747ec542c88e4034868da45eda8292456154e0a19d3c4d0d200aa8a4b # {"$imagepolicy": "flux-system:plarza-app"}
+          image: ghcr.io/plarza/app:main-0ea7207d066f-15@sha256:1f709f18c30eb2bf50c0c12efdec1afa8462beae695a3445255a9da03bee901f # {"$imagepolicy": "flux-system:plarza-app"}
           imagePullPolicy: IfNotPresent
           command:
             - bun
@@ -150,7 +150,7 @@ spec:
             runAsNonRoot: true
       containers:
         - name: app
-          image: ghcr.io/plarza/app:main-d838ac40c95e-11@sha256:ceae2dc747ec542c88e4034868da45eda8292456154e0a19d3c4d0d200aa8a4b # {"$imagepolicy": "flux-system:plarza-app"}
+          image: ghcr.io/plarza/app:main-0ea7207d066f-15@sha256:1f709f18c30eb2bf50c0c12efdec1afa8462beae695a3445255a9da03bee901f # {"$imagepolicy": "flux-system:plarza-app"}
           imagePullPolicy: IfNotPresent
           env:
             - name: NODE_ENV
