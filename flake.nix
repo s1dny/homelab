@@ -57,7 +57,11 @@
         ];
 
         services.zeroclaw.instances.default.package =
-          zeroclaw.packages.${pkgs.system}.zeroclaw.overrideAttrs (_: {
+          zeroclaw.packages.${pkgs.stdenv.hostPlatform.system}.zeroclaw.overrideAttrs (old: {
+            # Upstream sets no meta.mainProgram, so the module's `lib.getExe`
+            # falls back to guessing the binary name and warns.
+            meta = (old.meta or { }) // { mainProgram = "zeroclaw"; };
+
             # Upstream's nix/hashes.json is stale at this pin: it still lists
             # git-dependency hashes (wacore-0.6.0 and friends) while Cargo.lock
             # now resolves every crate from crates.io. buildRustPackage's own
