@@ -670,6 +670,11 @@ in
     openssh.authorizedKeys.keys = defaultHostAuthorizedKeys;
   };
 
+  # Passwordless sudo for wheel: any holder of an authorized SSH key gets root
+  # with no second factor, for every command. Chosen deliberately for
+  # non-interactive administration of this host.
+  security.sudo.wheelNeedsPassword = false;
+
   nixpkgs.config.allowUnfree = true;
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
 
