@@ -13,9 +13,14 @@
       url = "github:Mic92/sops-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    zeroclaw = {
+      url = "github:zeroclaw-labs/zeroclaw";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
-  outputs = { self, deploy-rs, nixpkgs, sops-nix, ... }:
+  outputs = { self, deploy-rs, nixpkgs, sops-nix, zeroclaw, ... }:
     let
       system = "x86_64-linux";
     in {
@@ -34,11 +39,28 @@
             };
           });
 
-      nixosModules.default = { ... }: {
+      nixosModules.default = { pkgs, ... }: {
         imports = [
           sops-nix.nixosModules.sops
+          zeroclaw.nixosModules.default
           ./nixos/homelab-module.nix
         ];
+
+        # Upstream builds the full default feature set (Discord, WhatsApp,
+        # Telegram, ...). Only Matrix is used here, so trim the build via
+        # cargoBuildFlags. cargoDeps must be left alone: buildRustPackage
+        # derives it from cargoLock.outputHashes (nix/hashes.json), which the
+        # git dependencies require.
+        services.zeroclaw.instances.default.package =
+          zeroclaw.packages.${pkgs.system}.zeroclaw.overrideAttrs (_: {
+            cargoBuildFlags = [
+              "-p"
+              "zeroclaw"
+              "--no-default-features"
+              "--features"
+              "agent-runtime,channel-matrix"
+            ];
+          });
       };
 
       nixosConfigurations.azalab-0 = nixpkgs.lib.nixosSystem {

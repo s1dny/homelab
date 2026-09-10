@@ -8,6 +8,7 @@ let
   homelabRusticProtonSecretsFile = "${homelabRuntimeSecretsDir}/rustic-proton.env";
   homelabFluxAgeKeyFile = "${homelabRuntimeSecretsDir}/flux-age-key.txt";
   homelabFluxGitCredentialsFile = "${homelabRuntimeSecretsDir}/flux-git-credentials.env";
+  homelabZeroClawSecretsFile = "${homelabRuntimeSecretsDir}/zeroclaw.env";
   homelabHostSecretsSopsFile = ./secrets/host-secrets.sops.yaml;
   homelabSopsAgeKeyFile = "/var/lib/sops-nix/key.txt";
   fluxTransitionManifest = pkgs.fetchurl {
@@ -199,6 +200,77 @@ in
     group = "root";
     mode = "0400";
     restartUnits = [ "homelab-ensure-flux-bootstrap.service" ];
+  };
+  sops.secrets."homelab/zeroclaw.env" = {
+    sopsFile = homelabHostSecretsSopsFile;
+    format = "yaml";
+    key = "zeroclaw_env";
+    path = homelabZeroClawSecretsFile;
+    owner = "zeroclaw";
+    group = "zeroclaw";
+    mode = "0400";
+    restartUnits = [ "zeroclaw-default.service" ];
+  };
+
+  services.zeroclaw.instances.default = {
+    user = "zeroclaw";
+    group = "zeroclaw";
+    dataDir = "/var/lib/zeroclaw";
+    environmentFile = homelabZeroClawSecretsFile;
+    settings = {
+      schema_version = 3;
+
+      providers.models.openrouter.primary = {
+        api_key = "$OPENROUTER_API_KEY";
+        model = "z-ai/glm-5.3-flash";
+        provider_extra.provider.sort = "throughput";
+      };
+
+      agents.zeroclaw = {
+        model_provider = "openrouter.primary";
+        risk_profile = "private_chat";
+        channels = [ "matrix.zeroclaw" ];
+      };
+
+      risk_profiles.private_chat = {
+        level = "supervised";
+        workspace_only = true;
+        allowed_commands = [ ];
+        auto_approve = [ "memory_recall" "memory_store" ];
+      };
+
+      channels.matrix.zeroclaw = {
+        enabled = true;
+        homeserver = "https://matrix.aza.network";
+        user_id = "@zeroclaw:matrix.aza.network";
+        password = "$MATRIX_PASSWORD";
+        allowed_rooms = [ "$MATRIX_ROOM_ID" ];
+        reply_in_thread = false;
+      };
+
+      peer_groups.zeroclaw = {
+        channel = "matrix.zeroclaw";
+        agents = [ "zeroclaw" ];
+        external_peers = [
+          "@aiden:matrix.aza.network"
+          "@jakob:sadairs.com"
+        ];
+        output_modality = "text";
+      };
+
+      memory = {
+        backend = "sqlite.default";
+        auto_save = true;
+        consolidation_extract_facts = true;
+        conversation_retention_days = 0;
+        daily_retention_days = 0;
+        core_retention_days = 0;
+        embedding_provider = "none";
+        search_mode = "bm25";
+      };
+
+      storage.sqlite.default = { };
+    };
   };
   services.k3s = {
     enable = true;
