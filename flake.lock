@@ -45,11 +45,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1789047765,
-        "narHash": "sha256-zhAGQYF0g9e5hq1DWO7lsZpvMId5eG9dJkyooovhSlI=",
+        "lastModified": 1789049354,
+        "narHash": "sha256-G9kQe/jwaBUEHVN4tPtPMrYA/la8xjtr4YHpnAIYBNQ=",
         "owner": "s1dny",
         "repo": "merlin",
-        "rev": "3d23c2d2acd7f196e3e676d34705ed8ab4685ee8",
+        "rev": "06e0be4a80bf5565fce3c97c365a0817b9385d90",
         "type": "github"
       },
       "original": {
