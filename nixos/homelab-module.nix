@@ -587,6 +587,9 @@ in
     "d /etc/homelab 0755 root root -"
     "d /var/lib/sops-nix 0700 root root -"
     "d /var/lib/homelab 0755 root root -"
+    # Checkout sync.sh fetches into; owned by the admin user so the pull needs
+    # no privileges of its own.
+    "d /var/lib/homelab/repo 0755 ${defaultHostUsername} users -"
     "d /var/lib/homelab/generated 0750 root wheel -"
     "d /var/lib/homelab/generated/k8s 0750 root wheel -"
     "d /var/lib/merlin/agents 0750 merlin merlin -"

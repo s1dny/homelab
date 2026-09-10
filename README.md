@@ -15,9 +15,11 @@ nix flake check
 nix run github:serokell/deploy-rs -- .#azalab-0
 ```
 
-`sync.sh` remains available on the host as a break-glass/manual activation path. It
-reapplies the exact source embedded in the running NixOS closure and never updates inputs.
-Normal changes should be activated from a reviewed checkout with deploy-rs.
+`sync.sh` deploys from the host itself. It fetches and hard-resets a checkout at
+`/var/lib/homelab/repo` to `origin/main`, then activates that revision, so it always
+applies the current head rather than the running closure. It does not update `flake.lock`;
+input upgrades still happen in review. deploy-rs remains the path for activating a
+reviewed closure from a workstation with nix.
 
 ## Prerequisites
 - Domain in Cloudflare: `aza.network`

@@ -1,53 +1,23 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Deploy the current head of the homelab repo to this host.
+# Deploy the current head of main to this host.
 #
-# Two ways a rebuild can quietly apply the wrong revision, both guarded here:
-#
-#   1. `--flake /etc/homelab/source` rebuilds from the *deployed* generation's
-#      own source snapshot, so it can never observe a new commit. It reports
-#      success while changing nothing.
-#   2. `--flake github:s1dny/homelab` is answered from nix's flake tarball
-#      cache (`tarball-ttl`, 1 hour by default), so within that window it can
-#      rebuild an older revision and still report success.
-#
-# So resolve the branch head over the network here, pin the rebuild to that
-# exact revision, and refuse to report success unless the running system is
-# the one we asked for.
+# The flake ref is a local git checkout rather than `github:s1dny/homelab`,
+# because a `github:` ref is answered from nix's flake tarball cache for an
+# hour and can rebuild an older revision while reporting success. Fetching and
+# hard-resetting first means the checkout is exactly origin/main, so there is
+# nothing stale or dirty left for the rebuild to pick up.
 
-REPO_URL="https://github.com/s1dny/homelab.git"
-FLAKE_REF="github:s1dny/homelab"
+REPO_DIR="${HOMELAB_REPO_DIR:-/var/lib/homelab/repo}"
+REPO_URL="${HOMELAB_REPO_URL:-https://github.com/s1dny/homelab.git}"
 BRANCH="${HOMELAB_BRANCH:-main}"
-HOST="$(hostname -s)"
 
-echo "sync: resolving ${BRANCH} on ${REPO_URL}"
-REV="$(git ls-remote "$REPO_URL" "refs/heads/${BRANCH}" | cut -f1)"
-if [ -z "$REV" ]; then
-  echo "sync: could not resolve ${BRANCH}" >&2
-  exit 1
-fi
-echo "sync: target revision ${REV}"
-
-TARGET="$(nix eval --refresh --raw \
-  "${FLAKE_REF}/${REV}#nixosConfigurations.${HOST}.config.system.build.toplevel")"
-echo "sync: target system   ${TARGET}"
-
-CURRENT="$(readlink -f /run/current-system)"
-if [ "$CURRENT" = "$TARGET" ]; then
-  echo "sync: already running ${REV}, nothing to do"
-  exit 0
+if [ ! -d "$REPO_DIR/.git" ]; then
+  git clone "$REPO_URL" "$REPO_DIR"
 fi
 
-sudo nixos-rebuild switch --refresh --flake "${FLAKE_REF}/${REV}#${HOST}"
+git -C "$REPO_DIR" fetch --prune origin "$BRANCH"
+git -C "$REPO_DIR" reset --hard "origin/$BRANCH"
 
-# The whole point: a switch that silently left us on the old system is a
-# failure, not a success.
-NEW="$(readlink -f /run/current-system)"
-if [ "$NEW" != "$TARGET" ]; then
-  echo "sync: FAILED - expected ${TARGET}" >&2
-  echo "sync:          running  ${NEW}" >&2
-  exit 1
-fi
-
-echo "sync: ok, ${HOST} now running ${REV}"
+exec sudo nixos-rebuild switch --flake "$REPO_DIR#$(hostname -s)"
