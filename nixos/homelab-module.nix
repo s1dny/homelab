@@ -8,26 +8,25 @@ let
   homelabRusticProtonSecretsFile = "${homelabRuntimeSecretsDir}/rustic-proton.env";
   homelabFluxAgeKeyFile = "${homelabRuntimeSecretsDir}/flux-age-key.txt";
   homelabFluxGitCredentialsFile = "${homelabRuntimeSecretsDir}/flux-git-credentials.env";
-  homelabKestralSecretsFile = "${homelabRuntimeSecretsDir}/kestral.env";
+  homelabMerlinSecretsFile = "${homelabRuntimeSecretsDir}/merlin.env";
   homelabHostSecretsSopsFile = ./secrets/host-secrets.sops.yaml;
   # Injected into the agent's system prompt on every start, alongside any other
   # workspace identity files (AGENTS.md, IDENTITY.md, ...).
-  kestralSoulFile = pkgs.writeText "kestral-SOUL.md" ''
+  merlinSoulFile = pkgs.writeText "merlin-SOUL.md" ''
     # soul
 
-    you are "kestral", an assistant in matrix chats with aiden and jakob.
+    you are "merlin", an assistant in matrix chats with aiden and jakob.
 
     ## voice
 
     - write in lowercase, including "i". sentences don't start with a capital.
     - casual and conversational, the way a competent colleague types in chat.
-    - still professional. no genz slang — no "fr", "ngl", "vibes", "bet",
-      "lowkey", "no cap". no forced enthusiasm, no hype.
+    - still professional. no unnecessary genz slang, no forced enthusiasm, no hype.
     - proper nouns, acronyms, code identifiers and quoted text keep their real
-      casing: matrix, SQL, `DATABASE_URL`, GitHub, NixOS.
+      casing.
     - be brief. one or two sentences usually does it. no preambles like
       "great question" and no summarising what was just asked.
-    - emoji rarely — at most one, and only when it actually adds something.
+    - emoji rarely, and only when it actually adds something.
     - don't close every message with a follow-up question or an offer to help.
 
     ## behaviour
@@ -39,15 +38,15 @@ let
   # ZeroClaw's Matrix channel never accepts invites itself, so a bot that is
   # invited to a room just sits in "invite" state forever. This polls for
   # pending invites and joins the ones sent by a known peer, which is what
-  # lets Kestral be dropped into an existing DM and start talking.
-  kestralAutojoin = pkgs.writeShellApplication {
-    name = "kestral-autojoin";
+  # lets merlin be dropped into an existing DM and start talking.
+  merlinAutojoin = pkgs.writeShellApplication {
+    name = "merlin-autojoin";
     runtimeInputs = with pkgs; [ curl jq coreutils ];
     text = ''
       set -euo pipefail
 
       HS="https://matrix.aza.network"
-      STATE="/var/lib/kestral/autojoin"
+      STATE="/var/lib/merlin/autojoin"
       TOKEN_FILE="$STATE/token"
       ALLOWED='["@aiden:matrix.aza.network","@jakob:sadairs.com"]'
 
@@ -69,14 +68,14 @@ let
       if [ "$CODE" != "200" ]; then
         BODY="$(jq -n --arg p "$MATRIX_PASSWORD" \
           '{type:"m.login.password",
-            identifier:{type:"m.id.user",user:"kestral"},
+            identifier:{type:"m.id.user",user:"merlin"},
             password:$p,
-            initial_device_display_name:"kestral-autojoin"}')"
+            initial_device_display_name:"merlin-autojoin"}')"
         TOKEN="$(curl -sS -X POST "$HS/_matrix/client/v3/login" \
           -H 'Content-Type: application/json' --data-binary "$BODY" \
           | jq -r '.access_token // empty')"
         if [ -z "$TOKEN" ]; then
-          echo "kestral-autojoin: login failed" >&2
+          echo "merlin-autojoin: login failed" >&2
           exit 1
         fi
         ( umask 077; printf '%s' "$TOKEN" > "$TOKEN_FILE" )
@@ -106,7 +105,7 @@ let
           "$HS/_matrix/client/v3/join/$ENC" \
           -H "Authorization: Bearer $TOKEN" \
           -H 'Content-Type: application/json' -d '{}' || echo 000)"
-        echo "kestral-autojoin: joined $ROOM (HTTP $JC)"
+        echo "merlin-autojoin: joined $ROOM (HTTP $JC)"
       done <<< "$ROOMS"
     '';
   };
@@ -301,22 +300,22 @@ in
     mode = "0400";
     restartUnits = [ "homelab-ensure-flux-bootstrap.service" ];
   };
-  sops.secrets."homelab/kestral.env" = {
+  sops.secrets."homelab/merlin.env" = {
     sopsFile = homelabHostSecretsSopsFile;
     format = "yaml";
-    key = "kestral_env";
-    path = homelabKestralSecretsFile;
-    owner = "kestral";
-    group = "kestral";
+    key = "merlin_env";
+    path = homelabMerlinSecretsFile;
+    owner = "merlin";
+    group = "merlin";
     mode = "0400";
-    restartUnits = [ "zeroclaw-kestral.service" ];
+    restartUnits = [ "zeroclaw-merlin.service" ];
   };
 
-  services.zeroclaw.instances.kestral = {
-    user = "kestral";
-    group = "kestral";
-    dataDir = "/var/lib/kestral";
-    environmentFile = homelabKestralSecretsFile;
+  services.zeroclaw.instances.merlin = {
+    user = "merlin";
+    group = "merlin";
+    dataDir = "/var/lib/merlin";
+    environmentFile = homelabMerlinSecretsFile;
     settings = {
       schema_version = 3;
 
@@ -332,10 +331,10 @@ in
         provider_extra.provider.sort = "throughput";
       };
 
-      agents.kestral = {
+      agents.merlin = {
         model_provider = "openrouter.primary";
         risk_profile = "private_chat";
-        channels = [ "matrix.kestral" ];
+        channels = [ "matrix.merlin" ];
       };
 
       risk_profiles.private_chat = {
@@ -353,18 +352,18 @@ in
         block_high_risk_commands = false;
       };
 
-      channels.matrix.kestral = {
+      channels.matrix.merlin = {
         enabled = true;
         homeserver = "https://matrix.aza.network";
-        user_id = "@kestral:matrix.aza.network";
+        user_id = "@merlin:matrix.aza.network";
         password = "$MATRIX_PASSWORD";
         # Empty = every room the bot has joined. This is what lets it be
         # dropped into an existing DM without a config change; who may talk to
-        # it is still bounded by peer_groups.kestral.external_peers.
+        # it is still bounded by peer_groups.merlin.external_peers.
         allowed_rooms = [ ];
         reply_in_thread = false;
         # Only answer when @-mentioned (or when someone replies to the bot).
-        # Matches m.mentions pills, "@kestral", or the display name "Kestral".
+        # Matches m.mentions pills, "@merlin", or the display name "merlin".
         # Note: this gate is skipped in rooms flagged m.direct, so the room
         # must stay a normal group room for it to apply.
         mention_only = true;
@@ -372,9 +371,9 @@ in
         ack_reactions = false;
       };
 
-      peer_groups.kestral = {
-        channel = "matrix.kestral";
-        agents = [ "kestral" ];
+      peer_groups.merlin = {
+        channel = "matrix.merlin";
+        agents = [ "merlin" ];
         external_peers = [
           "@aiden:matrix.aza.network"
           "@jakob:sadairs.com"
@@ -406,22 +405,22 @@ in
       storage.sqlite.default = { };
     };
   };
-  systemd.services.kestral-autojoin = {
-    description = "Accept pending Matrix invites for Kestral";
-    after = [ "network-online.target" "zeroclaw-kestral.service" ];
+  systemd.services.merlin-autojoin = {
+    description = "Accept pending Matrix invites for merlin";
+    after = [ "network-online.target" "zeroclaw-merlin.service" ];
     wants = [ "network-online.target" ];
-    unitConfig.ConditionPathExists = homelabKestralSecretsFile;
+    unitConfig.ConditionPathExists = homelabMerlinSecretsFile;
     serviceConfig = {
       Type = "oneshot";
-      User = "kestral";
-      Group = "kestral";
-      EnvironmentFile = homelabKestralSecretsFile;
-      ExecStart = lib.getExe kestralAutojoin;
+      User = "merlin";
+      Group = "merlin";
+      EnvironmentFile = homelabMerlinSecretsFile;
+      ExecStart = lib.getExe merlinAutojoin;
     };
   };
 
-  systemd.timers.kestral-autojoin = {
-    description = "Poll for Matrix invites for Kestral";
+  systemd.timers.merlin-autojoin = {
+    description = "Poll for Matrix invites for merlin";
     wantedBy = [ "timers.target" ];
     timerConfig = {
       OnBootSec = "2m";
@@ -590,10 +589,10 @@ in
     "d /var/lib/homelab 0755 root root -"
     "d /var/lib/homelab/generated 0750 root wheel -"
     "d /var/lib/homelab/generated/k8s 0750 root wheel -"
-    "d /var/lib/kestral/agents 0750 kestral kestral -"
-    "d /var/lib/kestral/agents/kestral 0750 kestral kestral -"
-    "d /var/lib/kestral/agents/kestral/workspace 0750 kestral kestral -"
-    "L+ /var/lib/kestral/agents/kestral/workspace/SOUL.md - - - - ${kestralSoulFile}"
+    "d /var/lib/merlin/agents 0750 merlin merlin -"
+    "d /var/lib/merlin/agents/merlin 0750 merlin merlin -"
+    "d /var/lib/merlin/agents/merlin/workspace 0750 merlin merlin -"
+    "L+ /var/lib/merlin/agents/merlin/workspace/SOUL.md - - - - ${merlinSoulFile}"
     "d /var/lib/kubelet/seccomp 0755 root root -"
     "L+ /var/lib/kubelet/seccomp/chromium.json - - - - ${chromiumSeccompProfile}"
     "d /srv 0775 root users -"
