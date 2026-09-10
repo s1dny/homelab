@@ -8,14 +8,14 @@ let
   homelabRusticProtonSecretsFile = "${homelabRuntimeSecretsDir}/rustic-proton.env";
   homelabFluxAgeKeyFile = "${homelabRuntimeSecretsDir}/flux-age-key.txt";
   homelabFluxGitCredentialsFile = "${homelabRuntimeSecretsDir}/flux-git-credentials.env";
-  homelabZeroClawSecretsFile = "${homelabRuntimeSecretsDir}/zeroclaw.env";
+  homelabKestralSecretsFile = "${homelabRuntimeSecretsDir}/kestral.env";
   homelabHostSecretsSopsFile = ./secrets/host-secrets.sops.yaml;
   # Injected into the agent's system prompt on every start, alongside any other
   # workspace identity files (AGENTS.md, IDENTITY.md, ...).
-  zeroclawSoulFile = pkgs.writeText "zeroclaw-SOUL.md" ''
+  kestralSoulFile = pkgs.writeText "kestral-SOUL.md" ''
     # soul
 
-    you are "meta ai", an assistant in a private matrix room with aiden and jakob.
+    you are "kestral", an assistant in matrix chats with aiden and jakob.
 
     ## voice
 
@@ -36,6 +36,80 @@ let
     - if you're guessing or inferring, say that it's a guess.
     - don't pad with caveats or disclaimers that don't change the answer.
   '';
+  # ZeroClaw's Matrix channel never accepts invites itself, so a bot that is
+  # invited to a room just sits in "invite" state forever. This polls for
+  # pending invites and joins the ones sent by a known peer, which is what
+  # lets Kestral be dropped into an existing DM and start talking.
+  kestralAutojoin = pkgs.writeShellApplication {
+    name = "kestral-autojoin";
+    runtimeInputs = with pkgs; [ curl jq coreutils ];
+    text = ''
+      set -euo pipefail
+
+      HS="https://matrix.aza.network"
+      STATE="/var/lib/kestral/autojoin"
+      TOKEN_FILE="$STATE/token"
+      ALLOWED='["@aiden:matrix.aza.network","@jakob:sadairs.com"]'
+
+      mkdir -p "$STATE"
+      chmod 700 "$STATE"
+
+      TOKEN=""
+      if [ -r "$TOKEN_FILE" ]; then TOKEN="$(cat "$TOKEN_FILE")"; fi
+
+      # Reuse the cached token; a fresh login every minute would register a new
+      # device each time and break E2EE key sharing.
+      CODE=000
+      if [ -n "$TOKEN" ]; then
+        CODE="$(curl -sS -o /dev/null -w '%{http_code}' \
+          -H "Authorization: Bearer $TOKEN" \
+          "$HS/_matrix/client/v3/account/whoami" || echo 000)"
+      fi
+
+      if [ "$CODE" != "200" ]; then
+        BODY="$(jq -n --arg p "$MATRIX_PASSWORD" \
+          '{type:"m.login.password",
+            identifier:{type:"m.id.user",user:"kestral"},
+            password:$p,
+            initial_device_display_name:"kestral-autojoin"}')"
+        TOKEN="$(curl -sS -X POST "$HS/_matrix/client/v3/login" \
+          -H 'Content-Type: application/json' --data-binary "$BODY" \
+          | jq -r '.access_token // empty')"
+        if [ -z "$TOKEN" ]; then
+          echo "kestral-autojoin: login failed" >&2
+          exit 1
+        fi
+        ( umask 077; printf '%s' "$TOKEN" > "$TOKEN_FILE" )
+      fi
+
+      SYNC="$(curl -sS -G "$HS/_matrix/client/v3/sync" \
+        --data-urlencode 'filter={"room":{"timeline":{"limit":0}}}' \
+        --data-urlencode 'timeout=0' \
+        -H "Authorization: Bearer $TOKEN")"
+
+      # Only join invites issued by a known peer, so a stranger cannot pull the
+      # bot into a room of their own.
+      ROOMS="$(printf '%s' "$SYNC" | jq -r --argjson allowed "$ALLOWED" '
+        (.rooms.invite // {}) | to_entries[]
+        | select(any(.value.invite_state.events[]?;
+            .type == "m.room.member"
+            and .content.membership == "invite"
+            and (.sender as $s | $allowed | index($s) != null)))
+        | .key')"
+
+      if [ -z "$ROOMS" ]; then exit 0; fi
+
+      while IFS= read -r ROOM; do
+        [ -n "$ROOM" ] || continue
+        ENC="$(jq -rn --arg r "$ROOM" '$r|@uri')"
+        JC="$(curl -sS -o /dev/null -w '%{http_code}' -X POST \
+          "$HS/_matrix/client/v3/join/$ENC" \
+          -H "Authorization: Bearer $TOKEN" \
+          -H 'Content-Type: application/json' -d '{}' || echo 000)"
+        echo "kestral-autojoin: joined $ROOM (HTTP $JC)"
+      done <<< "$ROOMS"
+    '';
+  };
   homelabSopsAgeKeyFile = "/var/lib/sops-nix/key.txt";
   fluxTransitionManifest = pkgs.fetchurl {
     url = "https://github.com/fluxcd/flux2/releases/download/v2.8.8/install.yaml";
@@ -227,22 +301,22 @@ in
     mode = "0400";
     restartUnits = [ "homelab-ensure-flux-bootstrap.service" ];
   };
-  sops.secrets."homelab/zeroclaw.env" = {
+  sops.secrets."homelab/kestral.env" = {
     sopsFile = homelabHostSecretsSopsFile;
     format = "yaml";
-    key = "zeroclaw_env";
-    path = homelabZeroClawSecretsFile;
-    owner = "zeroclaw";
-    group = "zeroclaw";
+    key = "kestral_env";
+    path = homelabKestralSecretsFile;
+    owner = "kestral";
+    group = "kestral";
     mode = "0400";
-    restartUnits = [ "zeroclaw-default.service" ];
+    restartUnits = [ "zeroclaw-kestral.service" ];
   };
 
-  services.zeroclaw.instances.default = {
-    user = "zeroclaw";
-    group = "zeroclaw";
-    dataDir = "/var/lib/zeroclaw";
-    environmentFile = homelabZeroClawSecretsFile;
+  services.zeroclaw.instances.kestral = {
+    user = "kestral";
+    group = "kestral";
+    dataDir = "/var/lib/kestral";
+    environmentFile = homelabKestralSecretsFile;
     settings = {
       schema_version = 3;
 
@@ -258,10 +332,10 @@ in
         provider_extra.provider.sort = "throughput";
       };
 
-      agents.zeroclaw = {
+      agents.kestral = {
         model_provider = "openrouter.primary";
         risk_profile = "private_chat";
-        channels = [ "matrix.zeroclaw" ];
+        channels = [ "matrix.kestral" ];
       };
 
       risk_profiles.private_chat = {
@@ -279,15 +353,18 @@ in
         block_high_risk_commands = false;
       };
 
-      channels.matrix.zeroclaw = {
+      channels.matrix.kestral = {
         enabled = true;
         homeserver = "https://matrix.aza.network";
-        user_id = "@zeroclaw:matrix.aza.network";
+        user_id = "@kestral:matrix.aza.network";
         password = "$MATRIX_PASSWORD";
-        allowed_rooms = [ "$MATRIX_ROOM_ID" ];
+        # Empty = every room the bot has joined. This is what lets it be
+        # dropped into an existing DM without a config change; who may talk to
+        # it is still bounded by peer_groups.kestral.external_peers.
+        allowed_rooms = [ ];
         reply_in_thread = false;
         # Only answer when @-mentioned (or when someone replies to the bot).
-        # Matches m.mentions pills, "@zeroclaw", or the display name "Meta AI".
+        # Matches m.mentions pills, "@kestral", or the display name "Kestral".
         # Note: this gate is skipped in rooms flagged m.direct, so the room
         # must stay a normal group room for it to apply.
         mention_only = true;
@@ -295,9 +372,9 @@ in
         ack_reactions = false;
       };
 
-      peer_groups.zeroclaw = {
-        channel = "matrix.zeroclaw";
-        agents = [ "zeroclaw" ];
+      peer_groups.kestral = {
+        channel = "matrix.kestral";
+        agents = [ "kestral" ];
         external_peers = [
           "@aiden:matrix.aza.network"
           "@jakob:sadairs.com"
@@ -316,9 +393,43 @@ in
         search_mode = "bm25";
       };
 
+      # Image generation goes through fal.ai, not OpenRouter: the image_gen
+      # tool posts to https://fal.run/<model> and speaks only fal's API.
+      # api_key_env names the variable, so the key itself stays in the
+      # sops-encrypted EnvironmentFile rather than in the rendered config.
+      image_gen = {
+        enabled = true;
+        default_model = "meta/muse-image/text-to-image";
+        api_key_env = "FAL_KEY";
+      };
+
       storage.sqlite.default = { };
     };
   };
+  systemd.services.kestral-autojoin = {
+    description = "Accept pending Matrix invites for Kestral";
+    after = [ "network-online.target" "zeroclaw-kestral.service" ];
+    wants = [ "network-online.target" ];
+    unitConfig.ConditionPathExists = homelabKestralSecretsFile;
+    serviceConfig = {
+      Type = "oneshot";
+      User = "kestral";
+      Group = "kestral";
+      EnvironmentFile = homelabKestralSecretsFile;
+      ExecStart = lib.getExe kestralAutojoin;
+    };
+  };
+
+  systemd.timers.kestral-autojoin = {
+    description = "Poll for Matrix invites for Kestral";
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnBootSec = "2m";
+      OnUnitActiveSec = "1m";
+      AccuracySec = "10s";
+    };
+  };
+
   services.k3s = {
     enable = true;
     role = "server";
@@ -479,10 +590,10 @@ in
     "d /var/lib/homelab 0755 root root -"
     "d /var/lib/homelab/generated 0750 root wheel -"
     "d /var/lib/homelab/generated/k8s 0750 root wheel -"
-    "d /var/lib/zeroclaw/agents 0750 zeroclaw zeroclaw -"
-    "d /var/lib/zeroclaw/agents/zeroclaw 0750 zeroclaw zeroclaw -"
-    "d /var/lib/zeroclaw/agents/zeroclaw/workspace 0750 zeroclaw zeroclaw -"
-    "L+ /var/lib/zeroclaw/agents/zeroclaw/workspace/SOUL.md - - - - ${zeroclawSoulFile}"
+    "d /var/lib/kestral/agents 0750 kestral kestral -"
+    "d /var/lib/kestral/agents/kestral 0750 kestral kestral -"
+    "d /var/lib/kestral/agents/kestral/workspace 0750 kestral kestral -"
+    "L+ /var/lib/kestral/agents/kestral/workspace/SOUL.md - - - - ${kestralSoulFile}"
     "d /var/lib/kubelet/seccomp 0755 root root -"
     "L+ /var/lib/kubelet/seccomp/chromium.json - - - - ${chromiumSeccompProfile}"
     "d /srv 0775 root users -"

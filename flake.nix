@@ -56,7 +56,7 @@
           ./nixos/homelab-module.nix
         ];
 
-        services.zeroclaw.instances.default.package =
+        services.zeroclaw.instances.kestral.package =
           zeroclaw.packages.${pkgs.stdenv.hostPlatform.system}.zeroclaw.overrideAttrs (old: {
             # Upstream sets no meta.mainProgram, so the module's `lib.getExe`
             # falls back to guessing the binary name and warns.
