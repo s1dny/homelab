@@ -8,7 +8,7 @@ set -euo pipefail
 export RUSTIC_REPOSITORY="${RUSTIC_REPOSITORY:-/srv/rustic/repository}"
 PROTON_PATH="${RCLONE_PROTONDRIVE_PATH:-azalab-0/rustic}"
 
-SOURCES=(/etc/nixos /srv/immich /srv/libsql /srv/tuwunel)
+SOURCES=(/etc/nixos /srv/immich /srv/libsql /srv/tuwunel /var/lib/merlin)
 if [[ -n "${RUSTIC_HOST_SOURCES:-}" ]]; then
   read -r -a SOURCES <<< "${RUSTIC_HOST_SOURCES}"
 fi
@@ -19,9 +19,13 @@ fi
 exec 9>/run/rustic-host-backup.lock
 flock 9
 
+# SQLite's -shm is a transient index rebuilt from the -wal, so it is skipped;
+# the database and its -wal are captured together, which is what a restore needs.
 rustic backup --init \
   --glob '!/srv/libsql/**/snapshots/**' \
   --glob '!/srv/libsql/**/script_backup/**' \
+  --glob '!/var/lib/merlin/**/*.db-shm' \
+  --glob '!/var/lib/merlin/data/**' \
   "${SOURCES[@]}"
 
 rustic forget --prune \
