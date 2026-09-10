@@ -220,6 +220,12 @@ in
     settings = {
       schema_version = 3;
 
+      # The unit's PATH is coreutils/findutils/gnugrep/gnused/systemd only, with
+      # no shell, so the channels component crash-looped on `runtime.shell "sh"
+      # was not found on PATH`. Point at bash absolutely rather than relying on
+      # PATH. Command execution stays gated by risk_profiles.private_chat.
+      runtime.shell = "${pkgs.bash}/bin/bash";
+
       providers.models.openrouter.primary = {
         api_key = "$OPENROUTER_API_KEY";
         model = "z-ai/glm-5.3-flash";
