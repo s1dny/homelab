@@ -234,6 +234,10 @@ in
       model = {
         chat = "z-ai/glm-5.3-flash";
         image = "meta/muse-image";
+        embedding = "google/gemini-embedding-001";
+        # Matryoshka truncation from the native 3072, which keeps the vectors
+        # for a full archive near a tenth of a gigabyte.
+        embedding_dimensions = 768;
       };
 
       limits = {
