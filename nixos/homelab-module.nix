@@ -350,7 +350,13 @@ in
         model_provider = "openrouter.primary";
         risk_profile = "private_chat";
         channels = [ "matrix.merlin" ];
+        # MCP servers are deny-by-default: an agent with no mcp_bundles is
+        # granted none of them, however many are configured under [[mcp.servers]].
+        # Omission is not a grant, so the Exa server has to be handed over here.
+        mcp_bundles = [ "search" ];
       };
+
+      mcp_bundles.search.servers = [ "exa" ];
 
       risk_profiles.private_chat = {
         # Never prompt for approval: "*" short-circuits the approval check for
