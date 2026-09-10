@@ -14,9 +14,19 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    # ZeroClaw builds with fenix's stable Rust. Its own flake.lock pins fenix
+    # seven months behind its source, yielding rustc 1.93.1 while the crate
+    # requires 1.96.0, so pin fenix here and make ZeroClaw follow it. nixpkgs
+    # rustc (1.95.0) is also too old.
+    fenix = {
+      url = "github:nix-community/fenix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     zeroclaw = {
       url = "github:zeroclaw-labs/zeroclaw";
       inputs.nixpkgs.follows = "nixpkgs";
+      inputs.fenix.follows = "fenix";
     };
   };
 
