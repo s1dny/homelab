@@ -73,12 +73,15 @@
               lockFile = "${zeroclaw}/Cargo.lock";
             };
             # Only Matrix is used here; skip Discord/WhatsApp/Telegram/etc.
+            # browser-native pulls in fantoccini, which is what backs the
+            # rust_native browser backend; without it the browser tool is
+            # compiled out entirely (#[cfg(feature = "browser-native")]).
             cargoBuildFlags = [
               "-p"
               "zeroclaw"
               "--no-default-features"
               "--features"
-              "agent-runtime,channel-matrix"
+              "agent-runtime,channel-matrix,browser-native"
             ];
           });
       };

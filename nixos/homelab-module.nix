@@ -28,6 +28,7 @@ let
       "great question" and no summarising what was just asked.
     - emoji rarely, and only when it actually adds something.
     - don't close every message with a follow-up question or an offer to help.
+    - write plain text, never markdown, no em dashes.
 
     ## behaviour
 
@@ -50,80 +51,6 @@ let
     - if a web search fails or is rate limited, that says nothing about what is
       in your memory. search memory before concluding you have no record.
   '';
-  # ZeroClaw's Matrix channel never accepts invites itself, so a bot that is
-  # invited to a room just sits in "invite" state forever. This polls for
-  # pending invites and joins the ones sent by a known peer, which is what
-  # lets merlin be dropped into an existing DM and start talking.
-  merlinAutojoin = pkgs.writeShellApplication {
-    name = "merlin-autojoin";
-    runtimeInputs = with pkgs; [ curl jq coreutils ];
-    text = ''
-      set -euo pipefail
-
-      HS="https://matrix.aza.network"
-      STATE="/var/lib/merlin/autojoin"
-      TOKEN_FILE="$STATE/token"
-      ALLOWED='["@aiden:matrix.aza.network","@jakob:sadairs.com"]'
-
-      mkdir -p "$STATE"
-      chmod 700 "$STATE"
-
-      TOKEN=""
-      if [ -r "$TOKEN_FILE" ]; then TOKEN="$(cat "$TOKEN_FILE")"; fi
-
-      # Reuse the cached token; a fresh login every minute would register a new
-      # device each time and break E2EE key sharing.
-      CODE=000
-      if [ -n "$TOKEN" ]; then
-        CODE="$(curl -sS -o /dev/null -w '%{http_code}' \
-          -H "Authorization: Bearer $TOKEN" \
-          "$HS/_matrix/client/v3/account/whoami" || echo 000)"
-      fi
-
-      if [ "$CODE" != "200" ]; then
-        BODY="$(jq -n --arg p "$MATRIX_PASSWORD" \
-          '{type:"m.login.password",
-            identifier:{type:"m.id.user",user:"merlin"},
-            password:$p,
-            initial_device_display_name:"merlin-autojoin"}')"
-        TOKEN="$(curl -sS -X POST "$HS/_matrix/client/v3/login" \
-          -H 'Content-Type: application/json' --data-binary "$BODY" \
-          | jq -r '.access_token // empty')"
-        if [ -z "$TOKEN" ]; then
-          echo "merlin-autojoin: login failed" >&2
-          exit 1
-        fi
-        ( umask 077; printf '%s' "$TOKEN" > "$TOKEN_FILE" )
-      fi
-
-      SYNC="$(curl -sS -G "$HS/_matrix/client/v3/sync" \
-        --data-urlencode 'filter={"room":{"timeline":{"limit":0}}}' \
-        --data-urlencode 'timeout=0' \
-        -H "Authorization: Bearer $TOKEN")"
-
-      # Only join invites issued by a known peer, so a stranger cannot pull the
-      # bot into a room of their own.
-      ROOMS="$(printf '%s' "$SYNC" | jq -r --argjson allowed "$ALLOWED" '
-        (.rooms.invite // {}) | to_entries[]
-        | select(any(.value.invite_state.events[]?;
-            .type == "m.room.member"
-            and .content.membership == "invite"
-            and (.sender as $s | $allowed | index($s) != null)))
-        | .key')"
-
-      if [ -z "$ROOMS" ]; then exit 0; fi
-
-      while IFS= read -r ROOM; do
-        [ -n "$ROOM" ] || continue
-        ENC="$(jq -rn --arg r "$ROOM" '$r|@uri')"
-        JC="$(curl -sS -o /dev/null -w '%{http_code}' -X POST \
-          "$HS/_matrix/client/v3/join/$ENC" \
-          -H "Authorization: Bearer $TOKEN" \
-          -H 'Content-Type: application/json' -d '{}' || echo 000)"
-        echo "merlin-autojoin: joined $ROOM (HTTP $JC)"
-      done <<< "$ROOMS"
-    '';
-  };
   homelabSopsAgeKeyFile = "/var/lib/sops-nix/key.txt";
   fluxTransitionManifest = pkgs.fetchurl {
     url = "https://github.com/fluxcd/flux2/releases/download/v2.8.8/install.yaml";
@@ -358,6 +285,26 @@ in
 
       mcp_bundles.search.servers = [ "exa" ];
 
+      # Headless Chromium driven over WebDriver by chromedriver, which runs as
+      # its own loopback-only unit below. native_chrome_path is absolute for
+      # the same reason runtime.shell is: the unit's PATH carries almost
+      # nothing.
+      # allowed_domains already defaults to ["*"] for both tools, so public
+      # HTTPS was never gated. The real ceiling is the 1 MB response cap, which
+      # silently truncates anything data-shaped (price history CSVs and the
+      # like), so raise it. Private/LAN hosts stay blocked, as do the cloud
+      # metadata endpoints, which are blocked unconditionally.
+      http_request.max_response_size = 8388608;
+      web_fetch.max_response_size = 8388608;
+
+      browser = {
+        enabled = true;
+        backend = "rust_native";
+        native_headless = true;
+        native_webdriver_url = "http://127.0.0.1:9515";
+        native_chrome_path = "${pkgs.chromium}/bin/chromium";
+      };
+
       risk_profiles.private_chat = {
         # Never prompt for approval: "*" short-circuits the approval check for
         # every tool. The two gates below would otherwise still ask on
@@ -378,10 +325,12 @@ in
         homeserver = "https://matrix.aza.network";
         user_id = "@merlin:matrix.aza.network";
         password = "$MATRIX_PASSWORD";
-        # Empty = every room the bot has joined. This is what lets it be
-        # dropped into an existing DM without a config change; who may talk to
-        # it is still bounded by peer_groups.merlin.external_peers.
-        allowed_rooms = [ ];
+        # Exactly one room. An empty list would mean every room the bot has
+        # joined; naming the room means an invite elsewhere is inert even if
+        # something joins it. Must be the canonical room ID: ZeroClaw matches
+        # these literally and never resolves a #alias. Kept in the sops secret
+        # rather than inline, since this repo is public and the room is private.
+        allowed_rooms = [ "$MATRIX_ROOM_ID" ];
         reply_in_thread = false;
         # Only answer when @-mentioned (or when someone replies to the bot).
         # Matches m.mentions pills, "@merlin", or the display name "merlin".
@@ -447,27 +396,25 @@ in
       storage.sqlite.default = { };
     };
   };
-  systemd.services.merlin-autojoin = {
-    description = "Accept pending Matrix invites for merlin";
-    after = [ "network-online.target" "zeroclaw-merlin.service" ];
-    wants = [ "network-online.target" ];
-    unitConfig.ConditionPathExists = homelabMerlinSecretsFile;
+  # WebDriver endpoint for merlin's browser tool. Loopback-only: nothing off
+  # this host should be able to drive a browser running as this user.
+  systemd.services.chromedriver = {
+    description = "ChromeDriver WebDriver endpoint for merlin";
+    after = [ "network.target" ];
+    wantedBy = [ "multi-user.target" ];
     serviceConfig = {
-      Type = "oneshot";
+      ExecStart = "${pkgs.chromedriver}/bin/chromedriver --port=9515 --allowed-ips=127.0.0.1 --allowed-origins=*";
       User = "merlin";
       Group = "merlin";
-      EnvironmentFile = homelabMerlinSecretsFile;
-      ExecStart = lib.getExe merlinAutojoin;
-    };
-  };
-
-  systemd.timers.merlin-autojoin = {
-    description = "Poll for Matrix invites for merlin";
-    wantedBy = [ "timers.target" ];
-    timerConfig = {
-      OnBootSec = "2m";
-      OnUnitActiveSec = "1m";
-      AccuracySec = "10s";
+      Restart = "on-failure";
+      RestartSec = "5s";
+      # Chromium needs a writable home and /dev/shm for its sandbox.
+      StateDirectory = "chromedriver";
+      Environment = [ "HOME=/var/lib/chromedriver" ];
+      PrivateTmp = true;
+      ProtectSystem = "strict";
+      ProtectHome = true;
+      NoNewPrivileges = true;
     };
   };
 
