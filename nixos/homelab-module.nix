@@ -417,6 +417,27 @@ in
         api_key_env = "FAL_KEY";
       };
 
+      # Exa is not one of web_search's supported providers (duckduckgo, brave,
+      # tavily, searxng, jina, bocha), so it comes in over MCP instead. The
+      # built-in tool defaults to DuckDuckGo, which rate limits; turning it off
+      # leaves Exa as the only search path rather than letting the model pick
+      # the tool that fails.
+      web_search.enabled = false;
+
+      mcp = {
+        enabled = true;
+        servers = [
+          {
+            name = "exa";
+            transport = "http";
+            url = "https://mcp.exa.ai/mcp";
+            # headers is a secret field; the key is substituted from the
+            # sops-encrypted EnvironmentFile at unit start.
+            headers."x-api-key" = "$EXA_API_KEY";
+          }
+        ];
+      };
+
       storage.sqlite.default = { };
     };
   };
