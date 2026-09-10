@@ -246,6 +246,11 @@ in
         password = "$MATRIX_PASSWORD";
         allowed_rooms = [ "$MATRIX_ROOM_ID" ];
         reply_in_thread = false;
+        # Only answer when @-mentioned (or when someone replies to the bot).
+        # Matches m.mentions pills, "@zeroclaw", or the display name "Meta AI".
+        # Note: this gate is skipped in rooms flagged m.direct, so the room
+        # must stay a normal group room for it to apply.
+        mention_only = true;
       };
 
       peer_groups.zeroclaw = {

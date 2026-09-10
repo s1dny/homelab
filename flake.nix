@@ -46,13 +46,19 @@
           ./nixos/homelab-module.nix
         ];
 
-        # Upstream builds the full default feature set (Discord, WhatsApp,
-        # Telegram, ...). Only Matrix is used here, so trim the build via
-        # cargoBuildFlags. cargoDeps must be left alone: buildRustPackage
-        # derives it from cargoLock.outputHashes (nix/hashes.json), which the
-        # git dependencies require.
         services.zeroclaw.instances.default.package =
           zeroclaw.packages.${pkgs.system}.zeroclaw.overrideAttrs (_: {
+            # Upstream's nix/hashes.json is stale at this pin: it still lists
+            # git-dependency hashes (wacore-0.6.0 and friends) while Cargo.lock
+            # now resolves every crate from crates.io. buildRustPackage's own
+            # cargoLock therefore aborts with "A hash was specified for
+            # wacore-0.6.0, but there is no corresponding git dependency", so
+            # upstream's package does not evaluate as published. Cargo.lock has
+            # zero git deps, so re-import it without outputHashes.
+            cargoDeps = pkgs.rustPlatform.importCargoLock {
+              lockFile = "${zeroclaw}/Cargo.lock";
+            };
+            # Only Matrix is used here; skip Discord/WhatsApp/Telegram/etc.
             cargoBuildFlags = [
               "-p"
               "zeroclaw"
