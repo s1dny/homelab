@@ -269,7 +269,7 @@ in
 
       providers.models.openrouter.primary = {
         api_key = "$OPENROUTER_API_KEY";
-        model = "openai/gpt-oss-120b";
+        model = "z-ai/glm-5.3-flash";
         provider_extra.provider.sort = "throughput";
       };
 
