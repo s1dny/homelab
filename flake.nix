@@ -14,23 +14,13 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # ZeroClaw builds with fenix's stable Rust. Its own flake.lock pins fenix
-    # seven months behind its source, yielding rustc 1.93.1 while the crate
-    # requires 1.96.0, so pin fenix here and make ZeroClaw follow it. nixpkgs
-    # rustc (1.95.0) is also too old.
-    fenix = {
-      url = "github:nix-community/fenix";
+    merlin = {
+      url = "github:s1dny/merlin";
       inputs.nixpkgs.follows = "nixpkgs";
-    };
-
-    zeroclaw = {
-      url = "github:zeroclaw-labs/zeroclaw";
-      inputs.nixpkgs.follows = "nixpkgs";
-      inputs.fenix.follows = "fenix";
     };
   };
 
-  outputs = { self, deploy-rs, nixpkgs, sops-nix, zeroclaw, ... }:
+  outputs = { self, deploy-rs, nixpkgs, sops-nix, merlin, ... }:
     let
       system = "x86_64-linux";
     in {
@@ -49,41 +39,12 @@
             };
           });
 
-      nixosModules.default = { pkgs, ... }: {
+      nixosModules.default = { ... }: {
         imports = [
           sops-nix.nixosModules.sops
-          zeroclaw.nixosModules.default
+          merlin.nixosModules.default
           ./nixos/homelab-module.nix
         ];
-
-        services.zeroclaw.instances.merlin.package =
-          zeroclaw.packages.${pkgs.stdenv.hostPlatform.system}.zeroclaw.overrideAttrs (old: {
-            # Upstream sets no meta.mainProgram, so the module's `lib.getExe`
-            # falls back to guessing the binary name and warns.
-            meta = (old.meta or { }) // { mainProgram = "zeroclaw"; };
-
-            # Upstream's nix/hashes.json is stale at this pin: it still lists
-            # git-dependency hashes (wacore-0.6.0 and friends) while Cargo.lock
-            # now resolves every crate from crates.io. buildRustPackage's own
-            # cargoLock therefore aborts with "A hash was specified for
-            # wacore-0.6.0, but there is no corresponding git dependency", so
-            # upstream's package does not evaluate as published. Cargo.lock has
-            # zero git deps, so re-import it without outputHashes.
-            cargoDeps = pkgs.rustPlatform.importCargoLock {
-              lockFile = "${zeroclaw}/Cargo.lock";
-            };
-            # Only Matrix is used here; skip Discord/WhatsApp/Telegram/etc.
-            # browser-native pulls in fantoccini, which is what backs the
-            # rust_native browser backend; without it the browser tool is
-            # compiled out entirely (#[cfg(feature = "browser-native")]).
-            cargoBuildFlags = [
-              "-p"
-              "zeroclaw"
-              "--no-default-features"
-              "--features"
-              "agent-runtime,channel-matrix,browser-native"
-            ];
-          });
       };
 
       nixosConfigurations.azalab-0 = nixpkgs.lib.nixosSystem {

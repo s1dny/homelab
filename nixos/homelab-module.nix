@@ -12,45 +12,6 @@ let
   homelabHostSecretsSopsFile = ./secrets/host-secrets.sops.yaml;
   # Injected into the agent's system prompt on every start, alongside any other
   # workspace identity files (AGENTS.md, IDENTITY.md, ...).
-  merlinSoulFile = pkgs.writeText "merlin-SOUL.md" ''
-    # soul
-
-    you are "merlin", an assistant in matrix chats with aiden and jakob.
-
-    ## voice
-
-    - write in lowercase, including "i". sentences don't start with a capital.
-    - casual and conversational, the way a competent colleague types in chat.
-    - still professional. no unnecessary genz slang, no forced enthusiasm, no hype.
-    - proper nouns, acronyms, code identifiers and quoted text keep their real
-      casing.
-    - be brief. one or two sentences usually does it. no preambles like
-      "great question" and no summarising what was just asked.
-    - emoji rarely, and only when it actually adds something.
-    - don't close every message with a follow-up question or an offer to help.
-    - write plain text, never markdown, no em dashes.
-
-    ## behaviour
-
-    - answer what was asked. if you don't know, say so plainly.
-    - if you're guessing or inferring, say that it's a guess.
-    - don't pad with caveats or disclaimers that don't change the answer.
-
-    ## memory
-
-    you keep a private memory of these chats. tool suggestions only fire on
-    words like "remember" or "recall", so questions phrased as "who is x" or
-    "what is x" will not prompt you to look — you have to decide to.
-
-    - before answering about a person, character, project or past decision,
-      search your memory with `memory_recall` first.
-    - never say something doesn't exist, isn't in your files, or isn't in your
-      universe until you have actually searched memory for it. web search is
-      not a substitute: the things aiden and jakob ask about are usually
-      private to these chats and will never appear on the public web.
-    - if a web search fails or is rate limited, that says nothing about what is
-      in your memory. search memory before concluding you have no record.
-  '';
   homelabSopsAgeKeyFile = "/var/lib/sops-nix/key.txt";
   fluxTransitionManifest = pkgs.fetchurl {
     url = "https://github.com/fluxcd/flux2/releases/download/v2.8.8/install.yaml";
@@ -250,171 +211,38 @@ in
     owner = "merlin";
     group = "merlin";
     mode = "0400";
-    restartUnits = [ "zeroclaw-merlin.service" ];
+    restartUnits = [ "merlin.service" ];
   };
 
-  services.zeroclaw.instances.merlin = {
-    user = "merlin";
-    group = "merlin";
-    dataDir = "/var/lib/merlin";
+  services.merlin = {
+    enable = true;
     environmentFile = homelabMerlinSecretsFile;
+    soul = builtins.readFile ./merlin-soul.md;
+
     settings = {
-      schema_version = 3;
+      homeserver = "https://matrix.aza.network";
+      user_id = "@merlin:matrix.aza.network";
+      display_name = "merlin";
+      timezone = "Australia/Sydney";
+      context_window = 40;
 
-      # The unit's PATH is coreutils/findutils/gnugrep/gnused/systemd only, with
-      # no shell, so the channels component crash-looped on `runtime.shell "sh"
-      # was not found on PATH`. Point at bash absolutely rather than relying on
-      # PATH. Command execution stays gated by risk_profiles.private_chat.
-      runtime.shell = "${pkgs.bash}/bin/bash";
+      # allowed_rooms and allowed_senders come from the environment
+      # (MERLIN_ALLOWED_ROOMS / MERLIN_ALLOWED_SENDERS in the sops secret).
+      # This file is rendered into the world-readable Nix store from a public
+      # repository, and the room is private.
 
-      providers.models.openrouter.primary = {
-        api_key = "$OPENROUTER_API_KEY";
-        model = "z-ai/glm-5.3-flash";
-        provider_extra.provider.sort = "throughput";
+      model = {
+        chat = "z-ai/glm-5.3-flash";
+        image = "meta/muse-image";
       };
 
-      agents.merlin = {
-        model_provider = "openrouter.primary";
-        risk_profile = "private_chat";
-        channels = [ "matrix.merlin" ];
-        # MCP servers are deny-by-default: an agent with no mcp_bundles is
-        # granted none of them, however many are configured under [[mcp.servers]].
-        # Omission is not a grant, so the Exa server has to be handed over here.
-        mcp_bundles = [ "search" ];
+      limits = {
+        max_response_bytes = 8388608;
+        tool_iterations = 6;
+        request_timeout_s = 60;
+        exec_timeout_s = 60;
+        exec_memory_max = "1G";
       };
-
-      mcp_bundles.search.servers = [ "exa" ];
-
-      # Headless Chromium driven over WebDriver by chromedriver, which runs as
-      # its own loopback-only unit below. native_chrome_path is absolute for
-      # the same reason runtime.shell is: the unit's PATH carries almost
-      # nothing.
-      # allowed_domains already defaults to ["*"] for both tools, so public
-      # HTTPS was never gated. The real ceiling is the 1 MB response cap, which
-      # silently truncates anything data-shaped (price history CSVs and the
-      # like), so raise it. Private/LAN hosts stay blocked, as do the cloud
-      # metadata endpoints, which are blocked unconditionally.
-      http_request.max_response_size = 8388608;
-      web_fetch.max_response_size = 8388608;
-
-      browser = {
-        enabled = true;
-        backend = "rust_native";
-        native_headless = true;
-        native_webdriver_url = "http://127.0.0.1:9515";
-        native_chrome_path = "${pkgs.chromium}/bin/chromium";
-      };
-
-      risk_profiles.private_chat = {
-        # Never prompt for approval: "*" short-circuits the approval check for
-        # every tool. The two gates below would otherwise still ask on
-        # medium-risk tools and hard-block high-risk ones. Kept at
-        # "supervised" rather than "full" deliberately — "full" implicitly
-        # disables workspace_only, letting the agent reach outside its
-        # workspace, which is more than "approve everything" asks for.
-        level = "supervised";
-        workspace_only = true;
-        allowed_commands = [ ];
-        auto_approve = [ "*" ];
-        require_approval_for_medium_risk = false;
-        block_high_risk_commands = false;
-      };
-
-      channels.matrix.merlin = {
-        enabled = true;
-        homeserver = "https://matrix.aza.network";
-        user_id = "@merlin:matrix.aza.network";
-        password = "$MATRIX_PASSWORD";
-        # Exactly one room. An empty list would mean every room the bot has
-        # joined; naming the room means an invite elsewhere is inert even if
-        # something joins it. Must be the canonical room ID: ZeroClaw matches
-        # these literally and never resolves a #alias. Kept in the sops secret
-        # rather than inline, since this repo is public and the room is private.
-        allowed_rooms = [ "$MATRIX_ROOM_ID" ];
-        reply_in_thread = false;
-        # Only answer when @-mentioned (or when someone replies to the bot).
-        # Matches m.mentions pills, "@merlin", or the display name "merlin".
-        # Note: this gate is skipped in rooms flagged m.direct, so the room
-        # must stay a normal group room for it to apply.
-        mention_only = true;
-        # No 👀/✅/⚠️ reactions on incoming messages.
-        ack_reactions = false;
-      };
-
-      peer_groups.merlin = {
-        channel = "matrix.merlin";
-        agents = [ "merlin" ];
-        external_peers = [
-          "@aiden:matrix.aza.network"
-          "@jakob:sadairs.com"
-        ];
-        output_modality = "text";
-      };
-
-      memory = {
-        backend = "sqlite.default";
-        auto_save = true;
-        consolidation_extract_facts = true;
-        conversation_retention_days = 0;
-        daily_retention_days = 0;
-        core_retention_days = 0;
-        embedding_provider = "none";
-        search_mode = "bm25";
-      };
-
-      # Image generation goes through fal.ai, not OpenRouter: the image_gen
-      # tool posts to https://fal.run/<model> and speaks only fal's API.
-      # api_key_env names the variable, so the key itself stays in the
-      # sops-encrypted EnvironmentFile rather than in the rendered config.
-      image_gen = {
-        enabled = true;
-        default_model = "meta/muse-image/text-to-image";
-        api_key_env = "FAL_KEY";
-      };
-
-      # Exa is not one of web_search's supported providers (duckduckgo, brave,
-      # tavily, searxng, jina, bocha), so it comes in over MCP instead. The
-      # built-in tool defaults to DuckDuckGo, which rate limits; turning it off
-      # leaves Exa as the only search path rather than letting the model pick
-      # the tool that fails.
-      web_search.enabled = false;
-
-      mcp = {
-        enabled = true;
-        servers = [
-          {
-            name = "exa";
-            transport = "http";
-            url = "https://mcp.exa.ai/mcp";
-            # headers is a secret field; the key is substituted from the
-            # sops-encrypted EnvironmentFile at unit start.
-            headers."x-api-key" = "$EXA_API_KEY";
-          }
-        ];
-      };
-
-      storage.sqlite.default = { };
-    };
-  };
-  # WebDriver endpoint for merlin's browser tool. Loopback-only: nothing off
-  # this host should be able to drive a browser running as this user.
-  systemd.services.chromedriver = {
-    description = "ChromeDriver WebDriver endpoint for merlin";
-    after = [ "network.target" ];
-    wantedBy = [ "multi-user.target" ];
-    serviceConfig = {
-      ExecStart = "${pkgs.chromedriver}/bin/chromedriver --port=9515 --allowed-ips=127.0.0.1 --allowed-origins=*";
-      User = "merlin";
-      Group = "merlin";
-      Restart = "on-failure";
-      RestartSec = "5s";
-      # Chromium needs a writable home and /dev/shm for its sandbox.
-      StateDirectory = "chromedriver";
-      Environment = [ "HOME=/var/lib/chromedriver" ];
-      PrivateTmp = true;
-      ProtectSystem = "strict";
-      ProtectHome = true;
-      NoNewPrivileges = true;
     };
   };
 
@@ -581,10 +409,6 @@ in
     "d /var/lib/homelab/repo 0755 ${defaultHostUsername} users -"
     "d /var/lib/homelab/generated 0750 root wheel -"
     "d /var/lib/homelab/generated/k8s 0750 root wheel -"
-    "d /var/lib/merlin/agents 0750 merlin merlin -"
-    "d /var/lib/merlin/agents/merlin 0750 merlin merlin -"
-    "d /var/lib/merlin/agents/merlin/workspace 0750 merlin merlin -"
-    "L+ /var/lib/merlin/agents/merlin/workspace/SOUL.md - - - - ${merlinSoulFile}"
     "d /var/lib/kubelet/seccomp 0755 root root -"
     "L+ /var/lib/kubelet/seccomp/chromium.json - - - - ${chromiumSeccompProfile}"
     "d /srv 0775 root users -"
