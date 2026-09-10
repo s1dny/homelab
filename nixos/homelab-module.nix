@@ -224,7 +224,7 @@ in
       user_id = "@merlin:matrix.aza.network";
       display_name = "merlin";
       timezone = "Australia/Sydney";
-      context_window = 40;
+      context_window = 64;
 
       # allowed_rooms and allowed_senders come from the environment
       # (MERLIN_ALLOWED_ROOMS / MERLIN_ALLOWED_SENDERS in the sops secret).
@@ -238,7 +238,7 @@ in
 
       limits = {
         max_response_bytes = 8388608;
-        tool_iterations = 6;
+        tool_iterations = 16;
         request_timeout_s = 60;
         exec_timeout_s = 60;
         exec_memory_max = "1G";
