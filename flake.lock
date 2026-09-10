@@ -22,27 +22,6 @@
         "type": "github"
       }
     },
-    "fenix": {
-      "inputs": {
-        "nixpkgs": [
-          "nixpkgs"
-        ],
-        "rust-analyzer-src": "rust-analyzer-src"
-      },
-      "locked": {
-        "lastModified": 1788951729,
-        "narHash": "sha256-KOlH8TQmA7gBDG42h9u1mUwyEcOv3jomfj1CVdCrAD8=",
-        "owner": "nix-community",
-        "repo": "fenix",
-        "rev": "5cc16a9f2a3b79fc9803b7e90e5fa09697d33042",
-        "type": "github"
-      },
-      "original": {
-        "owner": "nix-community",
-        "repo": "fenix",
-        "type": "github"
-      }
-    },
     "flake-compat": {
       "flake": false,
       "locked": {
@@ -59,21 +38,23 @@
         "type": "github"
       }
     },
-    "flake-utils": {
+    "merlin": {
       "inputs": {
-        "systems": "systems_2"
+        "nixpkgs": [
+          "nixpkgs"
+        ]
       },
       "locked": {
-        "lastModified": 1731533236,
-        "narHash": "sha256-l0KFg5HjrsfsO/JpG+r7fRrqm12kzFHyUHqHCVpMMbI=",
-        "owner": "numtide",
-        "repo": "flake-utils",
-        "rev": "11707dc2f618dd54ca8739b309ec4fc024de578b",
+        "lastModified": 1789047492,
+        "narHash": "sha256-1isHKQrkKpRYfDn3BVBnET/HhQ+pk5UGVrSsVDcy180=",
+        "owner": "s1dny",
+        "repo": "merlin",
+        "rev": "b77f19ef19b7071524f8f42123f407f912a096ce",
         "type": "github"
       },
       "original": {
-        "owner": "numtide",
-        "repo": "flake-utils",
+        "owner": "s1dny",
+        "repo": "merlin",
         "type": "github"
       }
     },
@@ -96,27 +77,9 @@
     "root": {
       "inputs": {
         "deploy-rs": "deploy-rs",
-        "fenix": "fenix",
+        "merlin": "merlin",
         "nixpkgs": "nixpkgs",
-        "sops-nix": "sops-nix",
-        "zeroclaw": "zeroclaw"
-      }
-    },
-    "rust-analyzer-src": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1788897435,
-        "narHash": "sha256-tqA9DqXeBZpLnpAajT4YZt1ibNvU2dunjdAbNo3HgB4=",
-        "owner": "rust-lang",
-        "repo": "rust-analyzer",
-        "rev": "f3120321073d8046795c6824976be8b0ae92c999",
-        "type": "github"
-      },
-      "original": {
-        "owner": "rust-lang",
-        "ref": "nightly",
-        "repo": "rust-analyzer",
-        "type": "github"
+        "sops-nix": "sops-nix"
       }
     },
     "sops-nix": {
@@ -154,21 +117,6 @@
         "type": "github"
       }
     },
-    "systems_2": {
-      "locked": {
-        "lastModified": 1681028828,
-        "narHash": "sha256-Vy1rq5AaRuLzOxct8nz4T6wlgyUR7zLU309k9mBC768=",
-        "owner": "nix-systems",
-        "repo": "default",
-        "rev": "da67096a3b9bf56a91d16901293e51ba5b49a27e",
-        "type": "github"
-      },
-      "original": {
-        "owner": "nix-systems",
-        "repo": "default",
-        "type": "github"
-      }
-    },
     "utils": {
       "inputs": {
         "systems": "systems"
@@ -184,30 +132,6 @@
       "original": {
         "owner": "numtide",
         "repo": "flake-utils",
-        "type": "github"
-      }
-    },
-    "zeroclaw": {
-      "inputs": {
-        "fenix": [
-          "fenix"
-        ],
-        "flake-utils": "flake-utils",
-        "nixpkgs": [
-          "nixpkgs"
-        ]
-      },
-      "locked": {
-        "lastModified": 1788946794,
-        "narHash": "sha256-GMcoS4yyaYRvqaIgJOzQ/u14m+6EMaeWRnYdMRH+xao=",
-        "owner": "zeroclaw-labs",
-        "repo": "zeroclaw",
-        "rev": "96c05632c3edafe6412149e6938aa0806b4d7400",
-        "type": "github"
-      },
-      "original": {
-        "owner": "zeroclaw-labs",
-        "repo": "zeroclaw",
         "type": "github"
       }
     }
