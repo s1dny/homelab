@@ -10,6 +10,32 @@ let
   homelabFluxGitCredentialsFile = "${homelabRuntimeSecretsDir}/flux-git-credentials.env";
   homelabZeroClawSecretsFile = "${homelabRuntimeSecretsDir}/zeroclaw.env";
   homelabHostSecretsSopsFile = ./secrets/host-secrets.sops.yaml;
+  # Injected into the agent's system prompt on every start, alongside any other
+  # workspace identity files (AGENTS.md, IDENTITY.md, ...).
+  zeroclawSoulFile = pkgs.writeText "zeroclaw-SOUL.md" ''
+    # soul
+
+    you are "meta ai", an assistant in a private matrix room with aiden and jakob.
+
+    ## voice
+
+    - write in lowercase, including "i". sentences don't start with a capital.
+    - casual and conversational, the way a competent colleague types in chat.
+    - still professional. no genz slang — no "fr", "ngl", "vibes", "bet",
+      "lowkey", "no cap". no forced enthusiasm, no hype.
+    - proper nouns, acronyms, code identifiers and quoted text keep their real
+      casing: matrix, SQL, `DATABASE_URL`, GitHub, NixOS.
+    - be brief. one or two sentences usually does it. no preambles like
+      "great question" and no summarising what was just asked.
+    - emoji rarely — at most one, and only when it actually adds something.
+    - don't close every message with a follow-up question or an offer to help.
+
+    ## behaviour
+
+    - answer what was asked. if you don't know, say so plainly.
+    - if you're guessing or inferring, say that it's a guess.
+    - don't pad with caveats or disclaimers that don't change the answer.
+  '';
   homelabSopsAgeKeyFile = "/var/lib/sops-nix/key.txt";
   fluxTransitionManifest = pkgs.fetchurl {
     url = "https://github.com/fluxcd/flux2/releases/download/v2.8.8/install.yaml";
@@ -239,10 +265,18 @@ in
       };
 
       risk_profiles.private_chat = {
+        # Never prompt for approval: "*" short-circuits the approval check for
+        # every tool. The two gates below would otherwise still ask on
+        # medium-risk tools and hard-block high-risk ones. Kept at
+        # "supervised" rather than "full" deliberately — "full" implicitly
+        # disables workspace_only, letting the agent reach outside its
+        # workspace, which is more than "approve everything" asks for.
         level = "supervised";
         workspace_only = true;
         allowed_commands = [ ];
-        auto_approve = [ "memory_recall" "memory_store" ];
+        auto_approve = [ "*" ];
+        require_approval_for_medium_risk = false;
+        block_high_risk_commands = false;
       };
 
       channels.matrix.zeroclaw = {
@@ -257,6 +291,8 @@ in
         # Note: this gate is skipped in rooms flagged m.direct, so the room
         # must stay a normal group room for it to apply.
         mention_only = true;
+        # No 👀/✅/⚠️ reactions on incoming messages.
+        ack_reactions = false;
       };
 
       peer_groups.zeroclaw = {
@@ -443,6 +479,10 @@ in
     "d /var/lib/homelab 0755 root root -"
     "d /var/lib/homelab/generated 0750 root wheel -"
     "d /var/lib/homelab/generated/k8s 0750 root wheel -"
+    "d /var/lib/zeroclaw/agents 0750 zeroclaw zeroclaw -"
+    "d /var/lib/zeroclaw/agents/zeroclaw 0750 zeroclaw zeroclaw -"
+    "d /var/lib/zeroclaw/agents/zeroclaw/workspace 0750 zeroclaw zeroclaw -"
+    "L+ /var/lib/zeroclaw/agents/zeroclaw/workspace/SOUL.md - - - - ${zeroclawSoulFile}"
     "d /var/lib/kubelet/seccomp 0755 root root -"
     "L+ /var/lib/kubelet/seccomp/chromium.json - - - - ${chromiumSeccompProfile}"
     "d /srv 0775 root users -"
