@@ -241,12 +241,17 @@ in
         # Capped rather than left to the provider: uncapped, this model spent
         # the large majority of its output tokens thinking, on trivial
         # questions as much as hard ones, and paid it again every tool round.
-        reasoning_effort = "low";
+        # "low" was too far the other way. It could not hold a multi-step plan
+        # across tool rounds, and burned whole turns rediscovering things it had
+        # already been told, so the saving was spent on wasted rounds anyway.
+        reasoning_effort = "medium";
       };
 
       limits = {
         max_response_bytes = 8388608;
-        tool_iterations = 32;
+        # An archive-wide question can spend a dozen rounds just shaping the
+        # query before it learns anything, and 32 cut those turns off mid-work.
+        tool_iterations = 64;
         request_timeout_s = 60;
         # The sandbox is persistent and the agent installs its own tools, so a
         # run can legitimately be an apk or pip install rather than a snippet.
