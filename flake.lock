@@ -59,11 +59,11 @@
         "nixpkgs": "nixpkgs"
       },
       "locked": {
-        "lastModified": 1789104608,
-        "narHash": "sha256-5oEPZPWha0mmtQMlgHI7AwguMDRIfR22tw5uuk7oqVQ=",
+        "lastModified": 1789105444,
+        "narHash": "sha256-vs+Vbps0oMEuOB7jGO44oY0Nso/WDq5nKDQwiOA5d64=",
         "owner": "plarza",
         "repo": "merlin",
-        "rev": "ea207180a3ed0d95f7484dcdeab3ea047c13bd0e",
+        "rev": "0efabb093c911e21f9311daeda40a2ce961aa34b",
         "type": "github"
       },
       "original": {
