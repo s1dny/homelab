@@ -28,6 +28,10 @@ let
   defaultHostHostname = "azalab-0";
   defaultHostUsername = "aiden";
   dockerPackage = pkgs.docker_29;
+  # Named once because the auto-deploy passes them to nixos-rebuild as well, and
+  # a substituter the deploy trusts but the host does not would silently rebuild.
+  merlinCacheUrl = "https://merlin.cachix.org";
+  merlinCacheKey = "merlin.cachix.org-1:3a5u//fmqBkd2G4CHlvCJY7FT6DcQf/P7i92b4BWsjA=";
   defaultHostAuthorizedKeys = [
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGNLDRhkSlst/ch4vyH8gm3bh79BRB4MIdLiB/jrT5w6 aiden@plarza.com"
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPz2x+U0zKQXfaIVummROlUunU5l0DIJiHdF2KQrqrIY aiden@plarza.com"
@@ -448,6 +452,9 @@ in
     "d /srv/libsql/plarza 0750 666 666 -"
     "d /srv/libsql/spinyourlife 0750 666 666 -"
     "d /srv/plarza-dashboard-deploy 0750 ${defaultHostUsername} users -"
+    # Root-owned, unlike the other deploy checkouts: this one ends in a
+    # nixos-rebuild rather than a container restart.
+    "d /srv/merlin-deploy 0750 root root -"
     "d /srv/rustic/repository 0700 root root -"
     "d /srv/registry 0755 root root -"
     "d /srv/spinyourlife-deploy 0750 ${defaultHostUsername} users -"
@@ -552,6 +559,159 @@ in
     wantedBy = [ "timers.target" ];
     timerConfig = {
       OnBootSec = "60s";
+      OnUnitActiveSec = "1m";
+      AccuracySec = "10s";
+      Persistent = false;
+    };
+  };
+
+  # merlin is a flake input pinned by revision, so deploying it is not a restart
+  # but a lock bump: move flake.lock onto merlin's current main, push that, and
+  # rebuild. Doing it here rather than in merlin's CI keeps the credential on
+  # this host, where one already exists, instead of putting a cross-repo write
+  # token into GitHub Actions.
+  systemd.services.merlin-auto-deploy = {
+    description = "Deploy merlin from GitHub by bumping its flake pin";
+    after = [ "network-online.target" ];
+    wants = [ "network-online.target" ];
+    path = [
+      pkgs.bash
+      pkgs.coreutils
+      pkgs.git
+      pkgs.gnugrep
+      pkgs.jq
+      pkgs.nix
+      pkgs.openssh
+      pkgs.systemd
+      pkgs.util-linux
+    ];
+    serviceConfig = {
+      Type = "oneshot";
+      # Root, because the deploy ends in `nixos-rebuild switch`. The push borrows
+      # the admin user's GitHub key explicitly rather than giving root one.
+      User = "root";
+      WorkingDirectory = "/srv/merlin-deploy";
+      # A cache miss is guarded against below, but a substituted rebuild of the
+      # whole host is still not a one-minute job.
+      TimeoutStartSec = "30m";
+    };
+    script = ''
+      set -euo pipefail
+
+      branch="main"
+      work_dir="/srv/merlin-deploy"
+      repo_dir="$work_dir/homelab"
+      state_file="$work_dir/deployed-rev"
+      lock_file="$work_dir/deploy.lock"
+      homelab_url="git@github.com:s1dny/homelab.git"
+      merlin_url="https://github.com/plarza/merlin.git"
+
+      exec 9>"$lock_file"
+      if ! flock -n 9; then
+        echo "merlin-auto-deploy: another deploy is already running"
+        exit 0
+      fi
+
+      # Root has no GitHub identity of its own; this is the key GitHub already
+      # knows, and IdentitiesOnly stops ssh offering anything else first.
+      # accept-new rather than the default, because root's known_hosts starts
+      # empty and a prompt in a oneshot unit is a hang, not a question.
+      export GIT_SSH_COMMAND="ssh -i /home/${defaultHostUsername}/.ssh/id_ed25519 -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
+      export GIT_AUTHOR_NAME="merlin-auto-deploy"
+      export GIT_AUTHOR_EMAIL="merlin-auto-deploy@azalab-0"
+      export GIT_COMMITTER_NAME="$GIT_AUTHOR_NAME"
+      export GIT_COMMITTER_EMAIL="$GIT_AUTHOR_EMAIL"
+
+      # Cheap check first, so the usual tick costs one network round trip.
+      target_rev="$(git ls-remote "$merlin_url" "refs/heads/$branch" | cut -f1)"
+      if [[ -z "$target_rev" ]]; then
+        echo "merlin-auto-deploy: could not read merlin's $branch"
+        exit 1
+      fi
+      if [[ "$target_rev" == "$(cat "$state_file" 2>/dev/null || true)" ]]; then
+        exit 0
+      fi
+
+      if [[ ! -d "$repo_dir/.git" ]]; then
+        rm -rf "$repo_dir"
+        git clone --branch "$branch" "$homelab_url" "$repo_dir"
+      fi
+
+      cd "$repo_dir"
+      git fetch --prune origin "$branch"
+      # Hard reset rather than pull: a run that deferred below leaves an updated
+      # flake.lock in the tree, and it must not be carried into a later deploy.
+      git checkout -B "$branch" "origin/$branch"
+
+      nix flake update merlin
+
+      # What actually got locked, which is not necessarily target_rev if merlin's
+      # main moved between the ls-remote above and here.
+      locked_rev="$(nix flake metadata --json | jq -r '.locks.nodes.merlin.locked.rev')"
+      if [[ -z "$locked_rev" || "$locked_rev" == "null" ]]; then
+        echo "merlin-auto-deploy: flake.lock has no merlin revision"
+        exit 1
+      fi
+
+      # merlin's CI publishes to the cache only after its tests pass, so an
+      # uncached revision means the build is still running or it failed. Either
+      # way there is nothing to deploy yet, and rebuilding now would compile the
+      # whole dependency graph on this host. Deferring costs one more minute.
+      merlin_out=""
+      for attr in merlin merlin-sandbox sandbox-rootfs; do
+        out="$(nix eval --raw "github:plarza/merlin/$locked_rev#packages.x86_64-linux.$attr.outPath")"
+        if ! nix path-info --store "${merlinCacheUrl}" "$out" >/dev/null 2>&1; then
+          echo "merlin-auto-deploy: $attr for $locked_rev is not in the cache yet; waiting"
+          exit 0
+        fi
+        if [[ "$attr" == "merlin" ]]; then
+          merlin_out="$out"
+        fi
+      done
+
+      # The rebuild restarts merlin, which would cut off an answer mid-sentence.
+      # The worker's deployer defers the same way when a task is running. A start
+      # with no matching finish inside the turn timeout means one is in flight;
+      # an empty window means the last turn is older than any turn can live, so a
+      # wedged one cannot block the deploy forever.
+      last_turn="$(journalctl -u merlin --since "-11 min" -o cat 2>/dev/null \
+        | grep -oE "turn (started|finished)" | tail -1 || true)"
+      if [[ "$last_turn" == "turn started" ]]; then
+        echo "merlin-auto-deploy: a turn is in flight; deferring"
+        exit 0
+      fi
+
+      if git diff --quiet -- flake.lock; then
+        echo "merlin-auto-deploy: flake.lock already pins $locked_rev"
+      else
+        git commit -m "chore(merlin): deploy ''${locked_rev:0:12}" -- flake.lock
+        git push origin "$branch"
+      fi
+
+      nixos-rebuild switch --flake "$repo_dir#azalab-0" \
+        --option extra-substituters "${merlinCacheUrl}" \
+        --option extra-trusted-public-keys "${merlinCacheKey}"
+
+      # The pin moving is not proof the process restarted onto it.
+      if ! systemctl is-active --quiet merlin.service; then
+        echo "merlin-auto-deploy: merlin.service is not running after the rebuild"
+        exit 1
+      fi
+      if [[ "$(systemctl show -p ExecStart --value merlin.service)" != *"$merlin_out"* ]]; then
+        echo "merlin-auto-deploy: merlin.service is not running $locked_rev"
+        exit 1
+      fi
+
+      printf '%s\n' "$locked_rev" > "$state_file"
+      echo "merlin-auto-deploy: deployed $locked_rev"
+    '';
+  };
+
+  systemd.timers.merlin-auto-deploy = {
+    description = "Poll GitHub and deploy merlin changes";
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnBootSec = "90s";
       OnUnitActiveSec = "1m";
       AccuracySec = "10s";
       Persistent = false;
@@ -670,11 +830,11 @@ in
   # is a download rather than a twenty minute rustc run on a desktop CPU.
   nix.settings.substituters = [
     "https://cache.nixos.org/"
-    "https://merlin.cachix.org"
+    merlinCacheUrl
   ];
   nix.settings.trusted-public-keys = [
     "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
-    "merlin.cachix.org-1:3a5u//fmqBkd2G4CHlvCJY7FT6DcQf/P7i92b4BWsjA="
+    merlinCacheKey
   ];
 
   # This records the original install version and must not be changed during upgrades.
