@@ -658,11 +658,11 @@ in
   # is a download rather than a twenty minute rustc run on a desktop CPU.
   nix.settings.substituters = [
     "https://cache.nixos.org/"
-    "https://s1dny.cachix.org"
+    "https://merlin.cachix.org"
   ];
   nix.settings.trusted-public-keys = [
     "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
-    "s1dny.cachix.org-1:ErYMHekYhuRBpxujjpfoUg1/YrGPhzsAXNbBO+N+2jA="
+    "merlin.cachix.org-1:3a5u//fmqBkd2G4CHlvCJY7FT6DcQf/P7i92b4BWsjA="
   ];
 
   # This records the original install version and must not be changed during upgrades.

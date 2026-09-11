@@ -20,4 +20,10 @@ fi
 git -C "$REPO_DIR" fetch --prune origin "$BRANCH"
 git -C "$REPO_DIR" reset --hard "origin/$BRANCH"
 
-exec sudo nixos-rebuild switch --flake "$REPO_DIR#$(hostname -s)"
+# The cache is also configured declaratively, but that only takes effect once a
+# rebuild has already happened. Passing it here means the rebuild that installs
+# it is itself a download rather than a twenty minute rustc run.
+exec sudo nixos-rebuild switch \
+  --flake "$REPO_DIR#$(hostname -s)" \
+  --option extra-substituters "https://merlin.cachix.org" \
+  --option extra-trusted-public-keys "merlin.cachix.org-1:3a5u//fmqBkd2G4CHlvCJY7FT6DcQf/P7i92b4BWsjA="
