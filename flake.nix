@@ -14,10 +14,11 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    merlin = {
-      url = "github:plarza/merlin";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
+    # Deliberately not following this flake's nixpkgs. merlin is built and
+    # cached by its own CI against its own pin, and overriding nixpkgs here
+    # changes the derivation, which changes the store path, which misses the
+    # cache and rebuilds four hundred crates on this host every deploy.
+    merlin.url = "github:plarza/merlin";
   };
 
   outputs = { self, deploy-rs, nixpkgs, sops-nix, merlin, ... }:
