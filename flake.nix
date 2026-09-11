@@ -15,7 +15,7 @@
     };
 
     merlin = {
-      url = "github:s1dny/merlin";
+      url = "github:plarza/merlin";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };

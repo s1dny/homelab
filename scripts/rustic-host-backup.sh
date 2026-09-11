@@ -8,7 +8,7 @@ set -euo pipefail
 export RUSTIC_REPOSITORY="${RUSTIC_REPOSITORY:-/srv/rustic/repository}"
 PROTON_PATH="${RCLONE_PROTONDRIVE_PATH:-azalab-0/rustic}"
 
-SOURCES=(/etc/nixos /srv/immich /srv/libsql /srv/tuwunel /var/lib/merlin)
+SOURCES=(/etc/nixos /srv/immich /srv/libsql /srv/tuwunel /var/lib/merlin /var/lib/merlin-workspace)
 if [[ -n "${RUSTIC_HOST_SOURCES:-}" ]]; then
   read -r -a SOURCES <<< "${RUSTIC_HOST_SOURCES}"
 fi
@@ -26,6 +26,7 @@ rustic backup --init \
   --glob '!/srv/libsql/**/script_backup/**' \
   --glob '!/var/lib/merlin/**/*.db-shm' \
   --glob '!/var/lib/merlin/data/**' \
+  --glob '!/var/lib/merlin/*.db.migrated' \
   "${SOURCES[@]}"
 
 rustic forget --prune \

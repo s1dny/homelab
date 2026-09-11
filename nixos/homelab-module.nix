@@ -654,6 +654,17 @@ in
   nixpkgs.config.allowUnfree = true;
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
 
+  # merlin is built by GitHub Actions and pushed to this cache, so a deploy here
+  # is a download rather than a twenty minute rustc run on a desktop CPU.
+  nix.settings.substituters = [
+    "https://cache.nixos.org/"
+    "https://s1dny.cachix.org"
+  ];
+  nix.settings.trusted-public-keys = [
+    "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
+    "s1dny.cachix.org-1:ErYMHekYhuRBpxujjpfoUg1/YrGPhzsAXNbBO+N+2jA="
+  ];
+
   # This records the original install version and must not be changed during upgrades.
   system.stateVersion = "25.11";
 }
