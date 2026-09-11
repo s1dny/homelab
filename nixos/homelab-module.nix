@@ -666,7 +666,7 @@ in
       merlin_out=""
       for attr in merlin merlin-sandbox sandbox-rootfs; do
         out="$(nix eval --raw "github:plarza/merlin/$locked_rev#packages.x86_64-linux.$attr.outPath")"
-        if ! nix path-info --store "${merlinCacheUrl}" "$out" >/dev/null 2>&1; then
+        if ! nix path-info --narinfo-cache-negative-ttl 0 --store "${merlinCacheUrl}" "$out" >/dev/null 2>&1; then
           echo "merlin-auto-deploy: $attr for $locked_rev is not in the cache yet; waiting"
           exit 0
         fi
