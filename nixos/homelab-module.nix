@@ -581,6 +581,9 @@ in
       pkgs.gnugrep
       pkgs.jq
       pkgs.nix
+      # Rather than /run/current-system/sw/bin, which is the configuration this
+      # unit is in the middle of replacing.
+      pkgs.nixos-rebuild
       pkgs.openssh
       pkgs.systemd
       pkgs.util-linux
