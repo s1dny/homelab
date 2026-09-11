@@ -239,7 +239,7 @@ in
       # repository, and the room is private.
 
       model = {
-        chat = "moonshotai/kimi-k2-thinking";
+        chat = "openai/gpt-5.6-sol";
         image = "fal-ai/z-image/turbo";
         # Only image generation moves; chat and embeddings stay on OpenRouter.
         # Needs FAL_API_KEY in the sops secret alongside OPENROUTER_API_KEY.
