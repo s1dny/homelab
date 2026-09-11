@@ -237,7 +237,10 @@ in
 
       model = {
         chat = "z-ai/glm-5.3-flash";
-        image = "meta/muse-image";
+        image = "fal-ai/z-image/turbo";
+        # Only image generation moves; chat and embeddings stay on OpenRouter.
+        # Needs FAL_API_KEY in the sops secret alongside OPENROUTER_API_KEY.
+        image_provider = "fal";
         embedding = "google/gemini-embedding-001";
         # Matryoshka truncation from the native 3072, which keeps the vectors
         # for a full archive near a tenth of a gigabyte.
