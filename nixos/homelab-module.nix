@@ -239,7 +239,7 @@ in
       # repository, and the room is private.
 
       model = {
-        chat = "z-ai/glm-5.3-flash";
+        chat = "meta/muse-spark-1.3-contributor";
         image = "fal-ai/z-image/turbo";
         # Only image generation moves; chat and embeddings stay on OpenRouter.
         # Needs FAL_API_KEY in the sops secret alongside OPENROUTER_API_KEY.
