@@ -238,13 +238,20 @@ in
         # Matryoshka truncation from the native 3072, which keeps the vectors
         # for a full archive near a tenth of a gigabyte.
         embedding_dimensions = 768;
+        # Capped rather than left to the provider: uncapped, this model spent
+        # the large majority of its output tokens thinking, on trivial
+        # questions as much as hard ones, and paid it again every tool round.
+        reasoning_effort = "low";
       };
 
       limits = {
         max_response_bytes = 8388608;
-        tool_iterations = 16;
+        tool_iterations = 32;
         request_timeout_s = 60;
-        exec_timeout_s = 60;
+        # The sandbox is persistent and the agent installs its own tools, so a
+        # run can legitimately be an apk or pip install rather than a snippet.
+        # A minute killed those halfway.
+        exec_timeout_s = 300;
         exec_memory_max = "1G";
       };
     };
