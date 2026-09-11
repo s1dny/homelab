@@ -218,6 +218,9 @@ in
     restartUnits = [ "merlin.service" ];
   };
 
+  systemd.services.merlin.environment.RUST_LOG =
+    "merlin=debug,matrix_sdk=info,mxlink=info,warn";
+
   services.merlin = {
     enable = true;
     environmentFile = homelabMerlinSecretsFile;
