@@ -1,5 +1,20 @@
 {
   "nodes": {
+    "crane": {
+      "locked": {
+        "lastModified": 1788465171,
+        "narHash": "sha256-Y1/TTVXjYXGF068IThQH9fPSZ0SIE74PABlUxnWTUH0=",
+        "owner": "ipetkov",
+        "repo": "crane",
+        "rev": "eb35abda9f232cc6610b1d1e3200d15c49b7ac54",
+        "type": "github"
+      },
+      "original": {
+        "owner": "ipetkov",
+        "repo": "crane",
+        "type": "github"
+      }
+    },
     "deploy-rs": {
       "inputs": {
         "flake-compat": "flake-compat",
@@ -40,20 +55,21 @@
     },
     "merlin": {
       "inputs": {
+        "crane": "crane",
         "nixpkgs": [
           "nixpkgs"
         ]
       },
       "locked": {
-        "lastModified": 1789053780,
-        "narHash": "sha256-tJW7+2POUyeaQ1eKhv5ASWKWOP9KV4eUSbgISsY2zAQ=",
-        "owner": "s1dny",
+        "lastModified": 1789091569,
+        "narHash": "sha256-dXt2zn/0/sevGH93iAP7NmHzB1qIHUrD4mGQiJJ5udM=",
+        "owner": "plarza",
         "repo": "merlin",
-        "rev": "4819c0c74d2736ab9f372b8c1a7fd57d9189ab9f",
+        "rev": "0998ee46bf64609f175c30092fde56153142ace8",
         "type": "github"
       },
       "original": {
-        "owner": "s1dny",
+        "owner": "plarza",
         "repo": "merlin",
         "type": "github"
       }
