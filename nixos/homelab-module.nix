@@ -219,7 +219,7 @@ in
   };
 
   systemd.services.merlin.environment.RUST_LOG =
-    "merlin=debug,matrix_sdk=info,mxlink=info,warn";
+    "merlin=debug,warn";
 
   services.merlin = {
     enable = true;
